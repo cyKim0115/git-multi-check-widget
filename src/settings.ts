@@ -24,6 +24,72 @@ function showBootError(message: string) {
   });
 }
 
+function reorderRepos(fromIndex: number, toIndex: number) {
+  if (fromIndex === toIndex) return;
+  const [entry] = configDraft.repos.splice(fromIndex, 1);
+  let insertAt = toIndex;
+  if (toIndex > fromIndex) insertAt -= 1;
+  configDraft.repos.splice(insertAt, 0, entry);
+}
+
+function getRepoDropIndex(list: HTMLElement, clientY: number): number {
+  const items = [...list.querySelectorAll<HTMLElement>(".settings-repo-item")];
+  for (let i = 0; i < items.length; i++) {
+    const rect = items[i].getBoundingClientRect();
+    if (clientY < rect.top + rect.height / 2) return i;
+  }
+  return items.length;
+}
+
+function bindRepoReorderHandle(handle: HTMLButtonElement, fromIndex: number) {
+  handle.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+
+    const list = $("settings-repo-list");
+    const pointerId = e.pointerId;
+    const items = () => [...list.querySelectorAll<HTMLElement>(".settings-repo-item")];
+    let dropIndex = fromIndex;
+
+    handle.setPointerCapture(pointerId);
+    items()[fromIndex]?.classList.add("settings-repo-item--dragging");
+
+    const clearMarkers = () => {
+      items().forEach((el) => {
+        el.classList.remove("settings-repo-item--dragging", "settings-repo-item--drop-target");
+      });
+    };
+
+    const onMove = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== pointerId) return;
+      dropIndex = getRepoDropIndex(list, moveEvent.clientY);
+      const markerIndex = Math.min(dropIndex, items().length - 1);
+      items().forEach((el, i) => {
+        el.classList.toggle(
+          "settings-repo-item--drop-target",
+          dropIndex !== fromIndex && i === markerIndex,
+        );
+      });
+    };
+
+    const onUp = (upEvent: PointerEvent) => {
+      if (upEvent.pointerId !== pointerId) return;
+      handle.releasePointerCapture(pointerId);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      clearMarkers();
+
+      dropIndex = getRepoDropIndex(list, upEvent.clientY);
+      if (dropIndex === fromIndex) return;
+      reorderRepos(fromIndex, dropIndex);
+      renderSettingsList();
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  });
+}
+
 function renderSettingsList() {
   const list = $("settings-repo-list");
   const empty = $("settings-empty");
@@ -38,6 +104,14 @@ function renderSettingsList() {
   configDraft.repos.forEach((repo, index) => {
     const li = document.createElement("li");
     li.className = "settings-repo-item";
+    li.dataset.index = String(index);
+
+    const dragHandle = document.createElement("button");
+    dragHandle.type = "button";
+    dragHandle.className = "repo-drag-handle";
+    dragHandle.setAttribute("aria-label", `${repo.name} 순서 변경`);
+    dragHandle.textContent = "⋮⋮";
+    bindRepoReorderHandle(dragHandle, index);
 
     const meta = document.createElement("div");
     meta.className = "settings-repo-meta";
@@ -54,6 +128,9 @@ function renderSettingsList() {
       meta.append(title, path);
     }
 
+    const actions = document.createElement("div");
+    actions.className = "settings-repo-actions";
+
     const remove = document.createElement("button");
     remove.type = "button";
     remove.className = "btn danger small";
@@ -63,7 +140,8 @@ function renderSettingsList() {
       renderSettingsList();
     });
 
-    li.append(meta, remove);
+    actions.append(remove);
+    li.append(dragHandle, meta, actions);
     list.append(li);
   });
 }

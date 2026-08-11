@@ -368,13 +368,54 @@ body {
 }
 
 .settings-repo-item {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   padding: 8px;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.04);
+}
+
+.settings-repo-item--dragging {
+  opacity: 0.55;
+}
+
+.settings-repo-item--drop-target {
+  outline: 1px solid var(--accent);
+  background: rgba(91, 159, 212, 0.1);
+}
+
+.repo-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  min-height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: grab;
+  touch-action: none;
+}
+
+.repo-drag-handle:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--fg);
+}
+
+.repo-drag-handle:active {
+  cursor: grabbing;
+}
+
+.settings-repo-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .settings-repo-meta {
