@@ -51,14 +51,19 @@ const PREVIEW_SCAN: RepoStatus[] = [
 const BASE_HEIGHT = 72;
 const ROW_HEIGHT = 36;
 const MAX_VISIBLE_ROWS = 5;
-const SCROLL_ACCEL = 0.42;
-const SCROLL_FRICTION = 0.88;
-const SCROLL_MIN_VELOCITY = 0.35;
-const SCROLL_MAX_VELOCITY = 96;
+const SCROLL_ACCEL_BASE = 0.07;
+const SCROLL_ACCEL_STEP = 0.035;
+const SCROLL_ACCEL_BURST_MAX = 7;
+const WHEEL_BURST_MS = 140;
+const SCROLL_FRICTION = 0.92;
+const SCROLL_MIN_VELOCITY = 0.18;
+const SCROLL_MAX_VELOCITY = 28;
 
 let scanGeneration = 0;
 let scrollFadeBound = false;
 let scrollVelocity = 0;
+let scrollBurst = 0;
+let lastWheelAt = 0;
 let scrollAnimId: number | null = null;
 let lastRepos: RepoStatus[] = [];
 
@@ -190,8 +195,20 @@ function ensureScrollAnimation(scroll: HTMLElement) {
   scrollAnimId = requestAnimationFrame(tick);
 }
 
+function currentScrollAccel(): number {
+  return SCROLL_ACCEL_BASE + scrollBurst * SCROLL_ACCEL_STEP;
+}
+
 function applyWheelScroll(scroll: HTMLElement, deltaY: number) {
-  scrollVelocity = clampScrollVelocity(scrollVelocity + deltaY * SCROLL_ACCEL);
+  const now = performance.now();
+  if (now - lastWheelAt < WHEEL_BURST_MS) {
+    scrollBurst = Math.min(SCROLL_ACCEL_BURST_MAX, scrollBurst + 1);
+  } else {
+    scrollBurst = 0;
+  }
+  lastWheelAt = now;
+
+  scrollVelocity = clampScrollVelocity(scrollVelocity + deltaY * currentScrollAccel());
   ensureScrollAnimation(scroll);
 }
 
