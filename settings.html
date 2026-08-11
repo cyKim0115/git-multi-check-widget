@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Git Multi-Check — 설정</title>
+    <script type="module" src="/src/settings.ts" defer></script>
+  </head>
+  <body class="settings-window-body">
+    <div class="settings-window">
+      <header class="settings-header">
+        <h1 id="settings-title">저장소 설정</h1>
+        <p class="settings-subtitle">경로 또는 Git URL을 테스트한 뒤 등록하세요.</p>
+      </header>
+
+      <section class="settings-section">
+        <h2 class="settings-label">등록된 저장소</h2>
+        <ul id="settings-repo-list" class="settings-repo-list settings-repo-list--window"></ul>
+        <p id="settings-empty" class="settings-hint hidden">등록된 저장소가 없습니다.</p>
+      </section>
+
+      <section class="settings-section">
+        <h2 class="settings-label">추가</h2>
+        <label class="field">
+          <span>이름 (선택)</span>
+          <input id="input-name" type="text" placeholder="자동: 폴더명" />
+        </label>
+        <label class="field">
+          <span>경로 또는 Git URL</span>
+          <input
+            id="input-url"
+            type="text"
+            placeholder="C:\Users\...\repo 또는 https://github.com/..."
+          />
+        </label>
+        <div class="settings-actions">
+          <button id="btn-test" class="btn secondary" type="button">테스트</button>
+          <button id="btn-add" class="btn primary" type="button" disabled>등록</button>
+        </div>
+        <p id="test-result" class="test-result">테스트로 유효성을 확인하세요.</p>
+      </section>
+
+      <footer class="settings-footer settings-footer--window">
+        <button id="btn-save-close" class="btn primary wide" type="button">저장하고 닫기</button>
+        <button id="btn-cancel" class="btn secondary wide" type="button">취소</button>
+      </footer>
+    </div>
+  </body>
+</html>

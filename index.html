@@ -28,41 +28,5 @@
         <button id="menu-quit" class="menu-item danger" type="button">종료</button>
       </div>
     </div>
-
-    <div id="settings-backdrop" class="settings-backdrop hidden">
-      <div id="settings-modal" class="settings-modal" role="dialog" aria-labelledby="settings-title">
-        <header class="settings-header">
-          <h2 id="settings-title">저장소 설정</h2>
-          <button id="settings-close" class="icon-btn" type="button" aria-label="닫기">✕</button>
-        </header>
-
-        <section class="settings-section">
-          <h3 class="settings-label">등록된 저장소</h3>
-          <ul id="settings-repo-list" class="settings-repo-list"></ul>
-          <p id="settings-empty" class="settings-hint hidden">등록된 저장소가 없습니다.</p>
-        </section>
-
-        <section class="settings-section">
-          <h3 class="settings-label">추가</h3>
-          <label class="field">
-            <span>이름 (선택)</span>
-            <input id="input-name" type="text" placeholder="자동: 폴더명" />
-          </label>
-          <label class="field">
-            <span>경로 또는 Git URL</span>
-            <input id="input-url" type="text" placeholder="C:\Users\...\repo 또는 https://github.com/..." />
-          </label>
-          <div class="settings-actions">
-            <button id="btn-test" class="btn secondary" type="button">테스트</button>
-            <button id="btn-add" class="btn primary" type="button" disabled>등록</button>
-          </div>
-          <p id="test-result" class="test-result">테스트로 유효성을 확인하세요.</p>
-        </section>
-
-        <footer class="settings-footer">
-          <button id="btn-save-close" class="btn primary wide" type="button">저장하고 닫기</button>
-        </footer>
-      </div>
-    </div>
   </body>
 </html>
