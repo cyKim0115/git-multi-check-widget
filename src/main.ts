@@ -1,54 +1,53 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { formatSummaryIcons, renderStatusIcons, rowClass } from "./status-icons";
-import type { RepoStatus, ScanResult } from "./types";
+import type { RepoConfig, RepoEntry, RepoStatus } from "./types";
+
 const PREVIEW = new URLSearchParams(window.location.search).has("preview");
 
-const PREVIEW_SCAN: ScanResult = {
-  scanned_at: String(Math.floor(Date.now() / 1000)),
-  summary: "1 dirty · 1 push · 1 pull · 0 err",
-  repos: [
-    {
-      name: "rag",
-      path: "C:\\Users\\cykim\\repo\\rag",
-      branch: "main",
-      dirty: true,
-      changed_count: 3,
-      ahead: 0,
-      behind: 0,
-      sync_state: "synced",
-      badge: "dirty ·3",
-      error: null,
-    },
-    {
-      name: "TeenipingTycoon",
-      path: "C:\\Users\\cykim\\repo\\TeenipingTycoon",
-      branch: "develop",
-      dirty: false,
-      changed_count: 0,
-      ahead: 0,
-      behind: 2,
-      sync_state: "behind",
-      badge: "pull ·2",
-      error: null,
-    },
-    {
-      name: "system-crew",
-      path: "C:\\Users\\cykim\\repo\\system-crew",
-      branch: "main",
-      dirty: false,
-      changed_count: 0,
-      ahead: 1,
-      behind: 0,
-      sync_state: "ahead",
-      badge: "push ·1",
-      error: null,
-    },
-  ],
-};
+const PREVIEW_SCAN: RepoStatus[] = [
+  {
+    name: "rag",
+    path: "C:\\Users\\cykim\\repo\\rag",
+    branch: "main",
+    dirty: true,
+    changed_count: 3,
+    ahead: 0,
+    behind: 0,
+    sync_state: "synced",
+    badge: "dirty ·3",
+    error: null,
+  },
+  {
+    name: "TeenipingTycoon",
+    path: "C:\\Users\\cykim\\repo\\TeenipingTycoon",
+    branch: "develop",
+    dirty: false,
+    changed_count: 0,
+    ahead: 0,
+    behind: 2,
+    sync_state: "behind",
+    badge: "pull ·2",
+    error: null,
+  },
+  {
+    name: "system-crew",
+    path: "C:\\Users\\cykim\\repo\\system-crew",
+    branch: "main",
+    dirty: false,
+    changed_count: 0,
+    ahead: 1,
+    behind: 0,
+    sync_state: "ahead",
+    badge: "push ·1",
+    error: null,
+  },
+];
 
 const BASE_HEIGHT = 72;
 const ROW_HEIGHT = 36;
+
+let scanGeneration = 0;
 
 function $(id: string): HTMLElement {
   const el = document.getElementById(id);
@@ -56,10 +55,25 @@ function $(id: string): HTMLElement {
   return el;
 }
 
-function formatTime(value: string): string {
-  const n = Number(value);
-  const date = Number.isFinite(n) ? new Date(n * 1000) : new Date(value);
+function formatTime(unixSeconds: number): string {
+  const date = new Date(unixSeconds * 1000);
   return date.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+}
+
+function placeholderStatus(entry: RepoEntry): RepoStatus {
+  return {
+    name: entry.name,
+    path: entry.path,
+    branch: null,
+    dirty: false,
+    changed_count: 0,
+    ahead: 0,
+    behind: 0,
+    sync_state: "synced",
+    badge: "…",
+    error: null,
+    loading: true,
+  };
 }
 
 function renderMainRepos(repos: RepoStatus[]) {
@@ -75,7 +89,9 @@ function renderMainRepos(repos: RepoStatus[]) {
 
     const branch = document.createElement("span");
     branch.className = "repo-branch";
-    branch.textContent = repo.error ?? repo.branch ?? "—";
+    branch.textContent = repo.loading
+      ? "…"
+      : (repo.error ?? repo.branch ?? "—");
 
     li.append(name, branch, renderStatusIcons(repo));
     list.append(li);
@@ -87,6 +103,7 @@ function renderSummary(repos: RepoStatus[]) {
   const summaryEl = $("summary");
   summaryEl.replaceChildren(formatSummaryIcons(repos));
 }
+
 async function resizeWindow(repoCount: number) {
   const height = BASE_HEIGHT + Math.max(1, repoCount) * ROW_HEIGHT;
   try {
@@ -96,24 +113,69 @@ async function resizeWindow(repoCount: number) {
   }
 }
 
-async function refresh() {
+function renderRepos(repos: RepoStatus[]) {
+  renderSummary(repos);
+  renderMainRepos(repos);
+}
+
+async function refresh(options?: { doFetch?: boolean }) {
   const statusEl = $("status");
+  const doFetch = options?.doFetch ?? false;
+  const generation = ++scanGeneration;
+
   if (PREVIEW) {
-    renderSummary(PREVIEW_SCAN.repos);
-    renderMainRepos(PREVIEW_SCAN.repos);
-    statusEl.textContent = `updated ${formatTime(PREVIEW_SCAN.scanned_at)}`;
+    renderRepos(PREVIEW_SCAN);
+    statusEl.textContent = `updated ${formatTime(Math.floor(Date.now() / 1000))}`;
     return;
   }
-  statusEl.textContent = "scanning…";
+
+  let config: RepoConfig;
   try {
-    const result = (await invoke("scan_all_repos")) as ScanResult;
-    renderSummary(result.repos);
-    renderMainRepos(result.repos);
-    statusEl.textContent = `updated ${formatTime(result.scanned_at)}`;
+    config = (await invoke("get_config")) as RepoConfig;
   } catch (e) {
     statusEl.textContent = `error: ${String(e)}`;
+    return;
   }
+
+  const repos = config.repos.map(placeholderStatus);
+  renderRepos(repos);
+  statusEl.textContent = "scanning…";
+
+  if (repos.length === 0) {
+    statusEl.textContent = "no repos";
+    return;
+  }
+
+  for (let i = 0; i < config.repos.length; i++) {
+    if (generation !== scanGeneration) return;
+
+    const entry = config.repos[i];
+    try {
+      const updated = (await invoke("scan_one_repo", {
+        name: entry.name,
+        path: entry.path,
+        doFetch,
+      })) as RepoStatus;
+      if (generation !== scanGeneration) return;
+      repos[i] = updated;
+      renderRepos(repos);
+    } catch (e) {
+      if (generation !== scanGeneration) return;
+      repos[i] = {
+        ...repos[i],
+        loading: false,
+        error: String(e),
+        badge: "ERR",
+        sync_state: "error",
+      };
+      renderRepos(repos);
+    }
+  }
+
+  if (generation !== scanGeneration) return;
+  statusEl.textContent = `updated ${formatTime(Math.floor(Date.now() / 1000))}`;
 }
+
 function hideContextMenu() {
   $("context-menu").classList.add("hidden");
   $("context-backdrop").classList.add("hidden");
@@ -151,7 +213,7 @@ async function boot() {
   $("menu-settings").addEventListener("click", () => void openSettings());
   $("menu-refresh").addEventListener("click", () => {
     hideContextMenu();
-    void refresh();
+    void refresh({ doFetch: true });
   });
   $("menu-quit").addEventListener("click", async () => {
     hideContextMenu();
@@ -164,13 +226,13 @@ async function boot() {
 
   try {
     await listen("config-saved", () => {
-      void refresh();
+      void refresh({ doFetch: false });
     });
   } catch {
     /* browser preview */
   }
 
-  await refresh();
+  void refresh({ doFetch: false });
 
   let interval = 300_000;
   try {
@@ -178,7 +240,7 @@ async function boot() {
   } catch {
     /* default */
   }
-  window.setInterval(() => void refresh(), interval);
+  window.setInterval(() => void refresh({ doFetch: true }), interval);
 }
 
 void boot();

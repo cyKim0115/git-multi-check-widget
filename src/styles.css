@@ -125,6 +125,10 @@ body {
   opacity: 0.85;
 }
 
+.repo-item.pending {
+  opacity: 0.72;
+}
+
 .status-icons,
 .summary-icons {
   grid-row: 1 / span 2;
@@ -199,6 +203,11 @@ body {
 }
 
 .status-icon--no_upstream {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+}
+
+.status-icon--pending {
   background: rgba(255, 255, 255, 0.06);
   color: var(--muted);
 }

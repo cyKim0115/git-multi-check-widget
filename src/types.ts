@@ -28,6 +28,8 @@ export type RepoStatus = {
   sync_state: SyncState;
   badge: string;
   error: string | null;
+  /** UI placeholder while git scan is pending */
+  loading?: boolean;
 };
 
 export type ScanResult = {

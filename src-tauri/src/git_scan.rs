@@ -138,7 +138,7 @@ fn build_badge(dirty: bool, changed: u32, ahead: u32, behind: u32, sync: &SyncSt
     }
 }
 
-fn scan_one(entry: &RepoEntry, do_fetch: bool) -> RepoStatus {
+pub fn scan_one(entry: &RepoEntry, do_fetch: bool) -> RepoStatus {
     let path = Path::new(&entry.path);
     if !path.is_dir() {
         return RepoStatus {

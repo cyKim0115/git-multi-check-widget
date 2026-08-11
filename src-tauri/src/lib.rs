@@ -1,8 +1,8 @@
 mod config;
 mod git_scan;
 
-use config::{load_config, save_config, RepoConfig};
-use git_scan::{scan_repos, validate_repo_input, ScanResult, ValidateResult};
+use config::{load_config, save_config, RepoConfig, RepoEntry};
+use git_scan::{scan_one, scan_repos, validate_repo_input, RepoStatus, ScanResult, ValidateResult};
 use tauri::{Emitter, Manager, WindowEvent};
 
 const POLL_INTERVAL_MS: u64 = 300_000;
@@ -22,6 +22,16 @@ fn set_config(config: RepoConfig) -> Result<(), String> {
 fn scan_all_repos() -> ScanResult {
     let config = load_config();
     scan_repos(&config.repos, true)
+}
+
+#[tauri::command]
+fn scan_one_repo(name: String, path: String, do_fetch: bool) -> RepoStatus {
+    let entry = RepoEntry {
+        name,
+        path,
+        url: None,
+    };
+    scan_one(&entry, do_fetch)
 }
 
 #[tauri::command]
@@ -83,6 +93,7 @@ pub fn run() {
             get_config,
             set_config,
             scan_all_repos,
+            scan_one_repo,
             validate_repo,
             get_poll_interval_ms,
             quit_app,

@@ -1,6 +1,6 @@
 import type { RepoStatus } from "./types";
 
-type IconKind = "dirty" | "push" | "pull" | "diverged" | "error" | "clean" | "no_upstream";
+type IconKind = "dirty" | "push" | "pull" | "diverged" | "error" | "clean" | "no_upstream" | "pending";
 
 const ICONS: Record<IconKind, string> = {
   dirty: "●",
@@ -10,6 +10,7 @@ const ICONS: Record<IconKind, string> = {
   error: "!",
   clean: "✓",
   no_upstream: "—",
+  pending: "…",
 };
 
 function iconEl(kind: IconKind, count?: string, title?: string): HTMLSpanElement {
@@ -35,6 +36,7 @@ function iconEl(kind: IconKind, count?: string, title?: string): HTMLSpanElement
 
 /** Primary row tint class (error > dirty > sync). */
 export function rowClass(repo: RepoStatus): string {
+  if (repo.loading) return "pending";
   if (repo.error) return "error";
   if (repo.dirty) return "dirty";
   if (repo.sync_state === "diverged") return "diverged";
@@ -47,6 +49,11 @@ export function rowClass(repo: RepoStatus): string {
 export function renderStatusIcons(repo: RepoStatus): HTMLElement {
   const wrap = document.createElement("span");
   wrap.className = "status-icons";
+
+  if (repo.loading) {
+    wrap.append(iconEl("pending", undefined, "상태 확인 중"));
+    return wrap;
+  }
 
   if (repo.error) {
     wrap.append(iconEl("error", undefined, repo.error));
@@ -89,14 +96,20 @@ export function formatSummaryIcons(repos: RepoStatus[]): HTMLElement {
   const wrap = document.createElement("span");
   wrap.className = "summary-icons";
 
-  const dirty = repos.filter((r) => r.dirty && !r.error).length;
-  const push = repos.filter(
+  const ready = repos.filter((r) => !r.loading);
+  if (ready.length === 0) {
+    wrap.append(iconEl("pending", undefined, "상태 확인 중"));
+    return wrap;
+  }
+
+  const dirty = ready.filter((r) => r.dirty && !r.error).length;
+  const push = ready.filter(
     (r) => !r.error && (r.sync_state === "ahead" || r.sync_state === "diverged"),
   ).length;
-  const pull = repos.filter(
+  const pull = ready.filter(
     (r) => !r.error && (r.sync_state === "behind" || r.sync_state === "diverged"),
   ).length;
-  const err = repos.filter((r) => r.error).length;
+  const err = ready.filter((r) => r.error).length;
 
   if (dirty > 0) wrap.append(iconEl("dirty", String(dirty), `${dirty} dirty`));
   if (push > 0) wrap.append(iconEl("push", String(push), `${push} push`));
