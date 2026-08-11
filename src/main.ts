@@ -51,9 +51,15 @@ const PREVIEW_SCAN: RepoStatus[] = [
 const BASE_HEIGHT = 72;
 const ROW_HEIGHT = 36;
 const MAX_VISIBLE_ROWS = 5;
+const SCROLL_ACCEL = 0.42;
+const SCROLL_FRICTION = 0.88;
+const SCROLL_MIN_VELOCITY = 0.35;
+const SCROLL_MAX_VELOCITY = 96;
 
 let scanGeneration = 0;
 let scrollFadeBound = false;
+let scrollVelocity = 0;
+let scrollAnimId: number | null = null;
 let lastRepos: RepoStatus[] = [];
 
 function $(id: string): HTMLElement {
@@ -143,6 +149,52 @@ function updateScrollFade() {
   });
 }
 
+function maxScrollTop(scroll: HTMLElement): number {
+  return Math.max(0, scroll.scrollHeight - scroll.clientHeight);
+}
+
+function clampScrollVelocity(velocity: number): number {
+  return Math.max(-SCROLL_MAX_VELOCITY, Math.min(SCROLL_MAX_VELOCITY, velocity));
+}
+
+function ensureScrollAnimation(scroll: HTMLElement) {
+  if (scrollAnimId !== null) return;
+
+  const tick = () => {
+    if (Math.abs(scrollVelocity) < SCROLL_MIN_VELOCITY) {
+      scrollAnimId = null;
+      scrollVelocity = 0;
+      updateScrollFade();
+      return;
+    }
+
+    const max = maxScrollTop(scroll);
+    const prev = scroll.scrollTop;
+    const next = Math.max(0, Math.min(max, prev + scrollVelocity));
+    scroll.scrollTop = next;
+
+    if (next !== prev) {
+      scrollVelocity *= SCROLL_FRICTION;
+    } else {
+      scrollVelocity *= 0.4;
+    }
+
+    if (scroll.scrollTop <= 0 || scroll.scrollTop >= max) {
+      scrollVelocity *= 0.55;
+    }
+
+    updateScrollFade();
+    scrollAnimId = requestAnimationFrame(tick);
+  };
+
+  scrollAnimId = requestAnimationFrame(tick);
+}
+
+function applyWheelScroll(scroll: HTMLElement, deltaY: number) {
+  scrollVelocity = clampScrollVelocity(scrollVelocity + deltaY * SCROLL_ACCEL);
+  ensureScrollAnimation(scroll);
+}
+
 function setupRepoScroll() {
   if (scrollFadeBound) return;
   scrollFadeBound = true;
@@ -158,8 +210,7 @@ function setupRepoScroll() {
     (e) => {
       if (scroll.scrollHeight <= scroll.clientHeight + 1) return;
       e.preventDefault();
-      scroll.scrollTop += e.deltaY;
-      updateScrollFade();
+      applyWheelScroll(scroll, e.deltaY);
     },
     { passive: false },
   );
