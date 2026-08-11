@@ -1,8 +1,15 @@
 use crate::config::RepoEntry;
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -52,12 +59,41 @@ struct GitOutput {
     stderr: String,
 }
 
+static GIT_PROGRAM: OnceLock<PathBuf> = OnceLock::new();
+
+/// Prefer git.exe on PATH to avoid git.cmd spawning a visible console window.
+fn git_program() -> PathBuf {
+    GIT_PROGRAM
+        .get_or_init(|| {
+            if let Some(path_var) = std::env::var_os("PATH") {
+                for dir in std::env::split_paths(&path_var) {
+                    let exe = dir.join("git.exe");
+                    if exe.is_file() {
+                        return exe;
+                    }
+                }
+            }
+            PathBuf::from("git")
+        })
+        .clone()
+}
+
+fn new_git_command() -> Command {
+    let mut cmd = Command::new(git_program());
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd
+}
+
 fn run_git(args: &[&str], cwd: Option<&Path>) -> GitOutput {
-    let mut cmd = Command::new("git");
+    let mut cmd = new_git_command();
     if let Some(dir) = cwd {
         cmd.current_dir(dir);
     }
-    let output = cmd.args(args).stdout(Stdio::piped()).stderr(Stdio::piped()).output();
+    let output = cmd.args(args).output();
 
     match output {
         Ok(out) => GitOutput {
