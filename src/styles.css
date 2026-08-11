@@ -419,6 +419,32 @@ body {
   outline: 1px solid var(--accent);
 }
 
+.path-drop-zone {
+  position: relative;
+  border-radius: 10px;
+  border: 1px dashed transparent;
+  padding: 2px;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.path-drop-zone--active {
+  border-color: var(--accent);
+  background: rgba(91, 159, 212, 0.08);
+}
+
+.path-drop-hint {
+  margin: 4px 2px 0;
+  font-size: 10px;
+  color: var(--muted);
+  opacity: 0.85;
+}
+
+.path-drop-zone--active .path-drop-hint {
+  color: var(--accent);
+}
+
 .settings-actions {
   display: flex;
   gap: 8px;

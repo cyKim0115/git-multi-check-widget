@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { RepoConfig, ValidateResult } from "./types";
 
 let configDraft: RepoConfig = { repos: [] };
@@ -150,11 +151,82 @@ async function refreshView() {
   resetAddForm();
 }
 
+function isPointInElement(el: HTMLElement, x: number, y: number): boolean {
+  const rect = el.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const logicalX = x / dpr;
+  const logicalY = y / dpr;
+  return (
+    logicalX >= rect.left &&
+    logicalX <= rect.right &&
+    logicalY >= rect.top &&
+    logicalY <= rect.bottom
+  );
+}
+
+function applyDroppedPath(path: string) {
+  const input = $("input-url") as HTMLInputElement;
+  input.value = path;
+  ($("btn-add") as HTMLButtonElement).disabled = true;
+  lastValidate = null;
+  $("test-result").textContent = "드롭된 경로를 테스트 중…";
+  $("test-result").className = "test-result pending";
+  void runTest();
+}
+
+function bindPathDropZone() {
+  const zone = $("path-drop-zone");
+  let dragOverZone = false;
+
+  const setActive = (active: boolean) => {
+    if (dragOverZone === active) return;
+    dragOverZone = active;
+    zone.classList.toggle("path-drop-zone--active", active);
+  };
+
+  void getCurrentWebview()
+    .onDragDropEvent((event) => {
+      const { payload } = event;
+
+      if (payload.type === "enter" || payload.type === "over") {
+        const position = "position" in payload ? payload.position : null;
+        if (position) {
+          setActive(isPointInElement(zone, position.x, position.y));
+        }
+        return;
+      }
+
+      if (payload.type === "leave") {
+        setActive(false);
+        return;
+      }
+
+      if (payload.type !== "drop") return;
+
+      setActive(false);
+      const position = payload.position;
+      if (!isPointInElement(zone, position.x, position.y)) return;
+
+      const path = payload.paths[0];
+      if (!path) {
+        $("test-result").textContent = "드롭된 항목에서 경로를 읽을 수 없습니다.";
+        $("test-result").className = "test-result fail";
+        return;
+      }
+
+      applyDroppedPath(path);
+    })
+    .catch(() => {
+      /* browser preview without Tauri webview */
+    });
+}
+
 function bindUi() {
   $("btn-test").addEventListener("click", () => void runTest());
   $("btn-add").addEventListener("click", () => addRepoFromForm());
   $("btn-save-close").addEventListener("click", () => void saveAndClose());
   $("btn-cancel").addEventListener("click", () => void closeWindow());
+  bindPathDropZone();
 
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape") void closeWindow();

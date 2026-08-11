@@ -35,11 +35,14 @@
         </label>
         <label class="field">
           <span>경로 또는 Git URL</span>
-          <input
-            id="input-url"
-            type="text"
-            placeholder="C:\Users\...\repo 또는 https://github.com/..."
-          />
+          <div id="path-drop-zone" class="path-drop-zone">
+            <input
+              id="input-url"
+              type="text"
+              placeholder="C:\Users\...\repo 또는 https://github.com/..."
+            />
+            <p class="path-drop-hint">폴더를 여기로 끌어다 놓으면 경로가 입력됩니다</p>
+          </div>
         </label>
         <div class="settings-actions">
           <button id="btn-test" class="btn secondary" type="button">테스트</button>
