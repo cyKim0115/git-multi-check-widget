@@ -152,9 +152,32 @@ body {
   background: rgba(212, 107, 91, 0.15);
 }
 
+.repo-name-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .repo-name {
   font-size: 12px;
   font-weight: 600;
+}
+
+.repo-refresh-indicator {
+  width: 10px;
+  height: 10px;
+  border: 2px solid rgba(154, 160, 166, 0.35);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: repo-refresh-spin 0.75s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes repo-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .repo-branch {

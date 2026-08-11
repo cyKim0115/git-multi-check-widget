@@ -50,6 +50,7 @@ const MAX_VISIBLE_ROWS = 5;
 
 let scanGeneration = 0;
 let scrollFadeBound = false;
+let lastRepos: RepoStatus[] = [];
 
 function $(id: string): HTMLElement {
   const el = document.getElementById(id);
@@ -85,9 +86,21 @@ function renderMainRepos(repos: RepoStatus[]) {
     const li = document.createElement("li");
     li.className = `repo-item ${rowClass(repo)}`;
 
+    const nameWrap = document.createElement("span");
+    nameWrap.className = "repo-name-wrap";
+
     const name = document.createElement("span");
     name.className = "repo-name";
     name.textContent = repo.name;
+    nameWrap.append(name);
+
+    if (repo.refreshing) {
+      const indicator = document.createElement("span");
+      indicator.className = "repo-refresh-indicator";
+      indicator.setAttribute("role", "status");
+      indicator.setAttribute("aria-label", "최신화 중");
+      nameWrap.append(indicator);
+    }
 
     const branch = document.createElement("span");
     branch.className = "repo-branch";
@@ -95,7 +108,7 @@ function renderMainRepos(repos: RepoStatus[]) {
       ? "…"
       : (repo.error ?? repo.branch ?? "—");
 
-    li.append(name, branch, renderStatusIcons(repo));
+    li.append(nameWrap, branch, renderStatusIcons(repo));
     list.append(li);
   }
   void resizeWindow(repos.length || 1);
@@ -154,8 +167,23 @@ async function resizeWindow(repoCount: number) {
 }
 
 function renderRepos(repos: RepoStatus[]) {
+  lastRepos = repos;
   renderSummary(repos);
   renderMainRepos(repos);
+}
+
+function findPreviousRepo(entry: RepoEntry): RepoStatus | undefined {
+  return lastRepos.find((r) => r.name === entry.name && r.path === entry.path);
+}
+
+function reposForRefresh(config: RepoConfig): RepoStatus[] {
+  return config.repos.map((entry) => {
+    const prev = findPreviousRepo(entry);
+    if (prev && !prev.loading) {
+      return { ...prev, refreshing: true };
+    }
+    return placeholderStatus(entry);
+  });
 }
 
 async function refresh(options?: { doFetch?: boolean }) {
@@ -177,9 +205,9 @@ async function refresh(options?: { doFetch?: boolean }) {
     return;
   }
 
-  const repos = config.repos.map(placeholderStatus);
+  const repos = reposForRefresh(config);
   renderRepos(repos);
-  statusEl.textContent = "scanning…";
+  statusEl.textContent = repos.some((r) => r.refreshing) ? "refreshing…" : "scanning…";
 
   if (repos.length === 0) {
     statusEl.textContent = "no repos";
@@ -197,13 +225,14 @@ async function refresh(options?: { doFetch?: boolean }) {
         doFetch,
       })) as RepoStatus;
       if (generation !== scanGeneration) return;
-      repos[i] = updated;
+      repos[i] = { ...updated, refreshing: false, loading: false };
       renderRepos(repos);
     } catch (e) {
       if (generation !== scanGeneration) return;
       repos[i] = {
         ...repos[i],
         loading: false,
+        refreshing: false,
         error: String(e),
         badge: "ERR",
         sync_state: "error",

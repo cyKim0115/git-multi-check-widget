@@ -36,7 +36,7 @@ function iconEl(kind: IconKind, count?: string, title?: string): HTMLSpanElement
 
 /** Primary row tint class (error > dirty > sync). */
 export function rowClass(repo: RepoStatus): string {
-  if (repo.loading) return "pending";
+  if (repo.loading && !repo.refreshing) return "pending";
   if (repo.error) return "error";
   if (repo.dirty) return "dirty";
   if (repo.sync_state === "diverged") return "diverged";
@@ -50,7 +50,7 @@ export function renderStatusIcons(repo: RepoStatus): HTMLElement {
   const wrap = document.createElement("span");
   wrap.className = "status-icons";
 
-  if (repo.loading) {
+  if (repo.loading && !repo.refreshing) {
     wrap.append(iconEl("pending", undefined, "상태 확인 중"));
     return wrap;
   }
