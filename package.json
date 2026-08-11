@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "build:app": "tauri build",
+    "make:icon": "python scripts/make_icon.py",
     "start:app": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/launch-user.ps1"
   },
   "dependencies": {
