@@ -1,6 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { emit } from "@tauri-apps/api/event";
-import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { emit, listen } from "@tauri-apps/api/event";
 import type { RepoConfig, ValidateResult } from "./types";
 
 let configDraft: RepoConfig = { repos: [] };
@@ -10,6 +9,18 @@ function $(id: string): HTMLElement {
   const el = document.getElementById(id);
   if (!el) throw new Error(`missing #${id}`);
   return el;
+}
+
+function showBootError(message: string) {
+  document.body.innerHTML = `
+    <div class="settings-window" style="padding:24px">
+      <h1>설정 로드 실패</h1>
+      <p class="test-result fail">${message}</p>
+      <button id="btn-error-close" class="btn secondary wide" type="button">닫기</button>
+    </div>`;
+  document.getElementById("btn-error-close")?.addEventListener("click", () => {
+    void closeWindow();
+  });
 }
 
 function renderSettingsList() {
@@ -65,6 +76,10 @@ function resetAddForm() {
   $("test-result").className = "test-result";
 }
 
+async function loadConfigDraft() {
+  configDraft = (await invoke("get_config")) as RepoConfig;
+}
+
 async function runTest() {
   const input = ($("input-url") as HTMLInputElement).value.trim();
   const resultEl = $("test-result");
@@ -117,9 +132,9 @@ function addRepoFromForm() {
 
 async function closeWindow() {
   try {
-    await getCurrentWebviewWindow().close();
+    await invoke("close_settings_window");
   } catch {
-    window.close();
+    /* browser preview */
   }
 }
 
@@ -129,11 +144,13 @@ async function saveAndClose() {
   await closeWindow();
 }
 
-async function boot() {
-  configDraft = (await invoke("get_config")) as RepoConfig;
+async function refreshView() {
+  await loadConfigDraft();
   renderSettingsList();
   resetAddForm();
+}
 
+function bindUi() {
   $("btn-test").addEventListener("click", () => void runTest());
   $("btn-add").addEventListener("click", () => addRepoFromForm());
   $("btn-save-close").addEventListener("click", () => void saveAndClose());
@@ -142,6 +159,18 @@ async function boot() {
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape") void closeWindow();
   });
+}
+
+async function boot() {
+  try {
+    await refreshView();
+    bindUi();
+    await listen("settings-open", () => {
+      void refreshView();
+    });
+  } catch (e) {
+    showBootError(String(e));
+  }
 }
 
 void boot();

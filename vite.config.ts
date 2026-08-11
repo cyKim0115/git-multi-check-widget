@@ -4,6 +4,7 @@ import { defineConfig } from "vite";
 const host = process.env.TAURI_DEV_HOST;
 
 export default defineConfig(async () => ({
+  base: "./",
   clearScreen: false,
   build: {
     rollupOptions: {
