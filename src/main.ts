@@ -66,6 +66,10 @@ let scrollBurst = 0;
 let lastWheelAt = 0;
 let scrollAnimId: number | null = null;
 let lastRepos: RepoStatus[] = [];
+let windowAutoSized = false;
+let userResizedWindow = false;
+let programmaticResize = false;
+let lastAutoSizedRepoCount = 0;
 
 function $(id: string): HTMLElement {
   const el = document.getElementById(id);
@@ -136,7 +140,7 @@ function renderMainRepos(repos: RepoStatus[]) {
 
     list.append(li);
   }
-  void resizeWindow(repos.length || 1);
+  void maybeAutoResizeWindow(repos.length || 1);
   updateScrollFade();
 }
 
@@ -220,7 +224,12 @@ function setupRepoScroll() {
   const wrap = $("repo-scroll-wrap");
 
   scroll.addEventListener("scroll", updateScrollFade, { passive: true });
-  window.addEventListener("resize", updateScrollFade);
+  window.addEventListener("resize", () => {
+    if (!programmaticResize && windowAutoSized) {
+      userResizedWindow = true;
+    }
+    updateScrollFade();
+  });
 
   wrap.addEventListener(
     "wheel",
@@ -238,13 +247,21 @@ function renderSummary(repos: RepoStatus[]) {
   summaryEl.replaceChildren(formatSummaryIcons(repos));
 }
 
-async function resizeWindow(repoCount: number) {
+async function maybeAutoResizeWindow(repoCount: number) {
+  if (userResizedWindow) return;
+  if (windowAutoSized && repoCount === lastAutoSizedRepoCount) return;
+
   const visibleRows = Math.min(Math.max(1, repoCount), MAX_VISIBLE_ROWS);
   const height = BASE_HEIGHT + visibleRows * ROW_HEIGHT;
   try {
+    programmaticResize = true;
     await invoke("resize_main_window", { height });
+    windowAutoSized = true;
+    lastAutoSizedRepoCount = repoCount;
   } catch {
     /* dev without tauri */
+  } finally {
+    programmaticResize = false;
   }
 }
 
