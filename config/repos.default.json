@@ -2,11 +2,13 @@
   "repos": [
     {
       "name": "rag",
-      "path": "C:\\Users\\cykim\\repo\\rag"
+      "path": "C:\\Users\\cykim\\repo\\rag",
+      "url": "https://github.com/cyKim0115/rag"
     },
     {
       "name": "TeenipingTycoon",
-      "path": "C:\\Users\\cykim\\repo\\TeenipingTycoon"
+      "path": "C:\\Users\\cykim\\repo\\TeenipingTycoon",
+      "url": null
     }
   ]
 }

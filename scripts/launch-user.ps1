@@ -1,4 +1,4 @@
-# Launches the standalone widget for non-developers.
+# Launches Git Multi-Check Widget for non-developers.
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
@@ -34,47 +34,36 @@ function Ensure-VcEnv {
 function Build-Release {
   $vcvars = Ensure-VcEnv
   if (-not $vcvars) {
-    Show-Error "Release build needs Visual Studio C++ Build Tools.`n`nRun once in a dev shell:`n  npm run build:app`n`nThen double-click start.bat again."
+    Show-Error "Release build needs Visual Studio C++ Build Tools.`n`nRun once in a dev shell:`n  npm run build:app"
     exit 1
   }
-
-  Write-Host "Building release (first time may take a few minutes)..."
+  Write-Host "Building release..."
   $cmd = "`"$vcvars`" && cd /d `"$Root`" && npm run build:app"
   cmd /c $cmd
   if ($LASTEXITCODE -ne 0 -or -not (Test-Path $ReleaseExe)) {
-    Show-Error "Build failed. Check Node.js / Rust / VS Build Tools."
+    Show-Error "Build failed."
     exit 1
   }
 }
 
 if (-not (Test-Path $ReleaseExe)) {
   if (-not (Test-Path (Join-Path $Root "node_modules"))) {
-    Write-Host "Installing npm dependencies..."
     Push-Location $Root
     npm install
     Pop-Location
-    if ($LASTEXITCODE -ne 0) {
-      Show-Error "npm install failed."
-      exit 1
-    }
   }
   Build-Release
 }
 
-if (-not (Test-Path $InstallDir)) {
-  New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-}
-
+New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 Copy-Item -Force $ReleaseExe $InstallExe
+
 $configDir = Join-Path $InstallDir "config"
-if (-not (Test-Path $configDir)) {
-  New-Item -ItemType Directory -Path $configDir -Force | Out-Null
-}
+New-Item -ItemType Directory -Force -Path $configDir | Out-Null
 $defaultConfig = Join-Path $Root "config\repos.default.json"
 $userConfig = Join-Path $env:LOCALAPPDATA "GitMultiCheckWidget\repos.json"
 if ((Test-Path $defaultConfig) -and -not (Test-Path $userConfig)) {
   Copy-Item -Force $defaultConfig $userConfig
 }
 
-Write-Host "Starting $InstallExe"
 Start-Process -FilePath $InstallExe

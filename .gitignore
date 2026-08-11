@@ -1,19 +1,14 @@
-# Node / Vite
-node_modules/
-dist/
-dist-ssr/
-*.local
-npm-debug.log*
-
-# Tauri / Rust
-src-tauri/target/
-
 # OS / editor
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Build artifacts (added during implementation)
+node_modules/
+dist/
+src-tauri/target/
 
 .env
 .env.*
