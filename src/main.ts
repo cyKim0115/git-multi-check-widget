@@ -1,9 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { formatSummaryIcons, renderStatusIcons, rowClass } from "./status-icons";
+import { DEFAULT_OPEN_TARGET } from "./open-targets";
+import type { OpenTarget } from "./open-targets";
 import type { RepoConfig, RepoEntry, RepoStatus } from "./types";
 
 const PREVIEW = new URLSearchParams(window.location.search).has("preview");
+
+let openTarget: OpenTarget = DEFAULT_OPEN_TARGET;
 
 const PREVIEW_SCAN: RepoStatus[] = [
   {
@@ -109,6 +113,16 @@ function renderMainRepos(repos: RepoStatus[]) {
       : (repo.error ?? repo.branch ?? "—");
 
     li.append(nameWrap, branch, renderStatusIcons(repo));
+
+    if (!repo.loading && !repo.error) {
+      li.classList.add("repo-item--openable");
+      li.title = "더블클릭하여 열기";
+      li.addEventListener("dblclick", (e) => {
+        e.preventDefault();
+        void openRepoAtPath(repo.path);
+      });
+    }
+
     list.append(li);
   }
   void resizeWindow(repos.length || 1);
@@ -184,6 +198,25 @@ function reposForRefresh(config: RepoConfig): RepoStatus[] {
     }
     return placeholderStatus(entry);
   });
+}
+
+async function openRepoAtPath(path: string) {
+  const statusEl = $("status");
+  try {
+    await invoke("open_repo", { path, openTarget });
+    statusEl.textContent = "opened";
+  } catch (e) {
+    statusEl.textContent = String(e);
+  }
+}
+
+async function loadOpenTarget() {
+  try {
+    const config = (await invoke("get_config")) as RepoConfig;
+    openTarget = config.open_target ?? DEFAULT_OPEN_TARGET;
+  } catch {
+    /* dev without tauri */
+  }
 }
 
 async function refresh(options?: { doFetch?: boolean }) {
@@ -297,12 +330,14 @@ async function boot() {
 
   try {
     await listen("config-saved", () => {
+      void loadOpenTarget();
       void refresh({ doFetch: false });
     });
   } catch {
     /* browser preview */
   }
 
+  await loadOpenTarget();
   void refresh({ doFetch: false });
 
   let interval = 300_000;

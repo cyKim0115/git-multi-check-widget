@@ -1,7 +1,8 @@
+mod app_launch;
 mod config;
 mod git_scan;
 
-use config::{load_config, save_config, RepoConfig, RepoEntry};
+use config::{load_config, save_config, OpenTarget, RepoConfig, RepoEntry};
 use git_scan::{scan_one, scan_repos, validate_repo_input, RepoStatus, ScanResult, ValidateResult};
 use tauri::{Emitter, Manager, WindowEvent};
 
@@ -72,6 +73,11 @@ fn close_settings_window(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn open_repo(path: String, open_target: OpenTarget) -> Result<(), String> {
+    app_launch::open_repo(&path, open_target)
+}
+
+#[tauri::command]
 fn resize_main_window(app: tauri::AppHandle, height: f64) -> Result<(), String> {
     let window = app
         .get_webview_window("main")
@@ -99,6 +105,7 @@ pub fn run() {
             quit_app,
             open_settings_window,
             close_settings_window,
+            open_repo,
             resize_main_window
         ])
         .on_window_event(|window, event| {

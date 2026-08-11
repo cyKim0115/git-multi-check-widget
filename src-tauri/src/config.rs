@@ -2,6 +2,18 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum OpenTarget {
+    #[default]
+    Fork,
+    Cmd,
+    GitBash,
+    Cursor,
+    VsCode,
+    Explorer,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RepoEntry {
     pub name: String,
@@ -10,9 +22,20 @@ pub struct RepoEntry {
     pub url: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RepoConfig {
     pub repos: Vec<RepoEntry>,
+    #[serde(default)]
+    pub open_target: OpenTarget,
+}
+
+impl Default for RepoConfig {
+    fn default() -> Self {
+        Self {
+            repos: Vec::new(),
+            open_target: OpenTarget::default(),
+        }
+    }
 }
 
 pub fn user_config_path() -> PathBuf {
@@ -55,6 +78,7 @@ fn seed_config() -> RepoConfig {
                 url: None,
             },
         ],
+        open_target: OpenTarget::default(),
     }
 }
 

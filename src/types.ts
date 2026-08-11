@@ -7,6 +7,8 @@ export type SyncState =
   | "no_remote"
   | "error";
 
+import type { OpenTarget } from "./open-targets";
+
 export type RepoEntry = {
   name: string;
   path: string;
@@ -15,6 +17,7 @@ export type RepoEntry = {
 
 export type RepoConfig = {
   repos: RepoEntry[];
+  open_target?: OpenTarget;
 };
 
 export type RepoStatus = {

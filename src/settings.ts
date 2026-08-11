@@ -1,9 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { normalizeOpenTarget, renderOpenTargetPicker } from "./open-target-picker";
+import { DEFAULT_OPEN_TARGET } from "./open-targets";
 import type { RepoConfig, ValidateResult } from "./types";
 
-let configDraft: RepoConfig = { repos: [] };
+let configDraft: RepoConfig = { repos: [], open_target: DEFAULT_OPEN_TARGET };
 let lastValidate: ValidateResult | null = null;
 
 function $(id: string): HTMLElement {
@@ -157,6 +159,13 @@ function resetAddForm() {
 
 async function loadConfigDraft() {
   configDraft = (await invoke("get_config")) as RepoConfig;
+  configDraft.open_target = normalizeOpenTarget(configDraft.open_target);
+}
+
+function renderOpenTargetSettings() {
+  renderOpenTargetPicker($("open-target-picker"), configDraft.open_target ?? DEFAULT_OPEN_TARGET, (target) => {
+    configDraft.open_target = target;
+  });
 }
 
 async function runTest() {
@@ -226,6 +235,7 @@ async function saveAndClose() {
 async function refreshView() {
   await loadConfigDraft();
   renderSettingsList();
+  renderOpenTargetSettings();
   resetAddForm();
 }
 
