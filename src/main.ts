@@ -46,8 +46,10 @@ const PREVIEW_SCAN: RepoStatus[] = [
 
 const BASE_HEIGHT = 72;
 const ROW_HEIGHT = 36;
+const MAX_VISIBLE_ROWS = 5;
 
 let scanGeneration = 0;
+let scrollFadeBound = false;
 
 function $(id: string): HTMLElement {
   const el = document.getElementById(id);
@@ -97,6 +99,43 @@ function renderMainRepos(repos: RepoStatus[]) {
     list.append(li);
   }
   void resizeWindow(repos.length || 1);
+  updateScrollFade();
+}
+
+function updateScrollFade() {
+  requestAnimationFrame(() => {
+    const scroll = $("repo-scroll");
+    const fadeTop = $("repo-fade-top");
+    const fadeBottom = $("repo-fade-bottom");
+    const canScroll = scroll.scrollHeight > scroll.clientHeight + 1;
+    const atTop = scroll.scrollTop <= 1;
+    const atBottom = scroll.scrollTop + scroll.clientHeight >= scroll.scrollHeight - 1;
+
+    fadeTop.classList.toggle("visible", canScroll && !atTop);
+    fadeBottom.classList.toggle("visible", canScroll && !atBottom);
+  });
+}
+
+function setupRepoScroll() {
+  if (scrollFadeBound) return;
+  scrollFadeBound = true;
+
+  const scroll = $("repo-scroll");
+  const wrap = $("repo-scroll-wrap");
+
+  scroll.addEventListener("scroll", updateScrollFade, { passive: true });
+  window.addEventListener("resize", updateScrollFade);
+
+  wrap.addEventListener(
+    "wheel",
+    (e) => {
+      if (scroll.scrollHeight <= scroll.clientHeight + 1) return;
+      e.preventDefault();
+      scroll.scrollTop += e.deltaY;
+      updateScrollFade();
+    },
+    { passive: false },
+  );
 }
 
 function renderSummary(repos: RepoStatus[]) {
@@ -105,7 +144,8 @@ function renderSummary(repos: RepoStatus[]) {
 }
 
 async function resizeWindow(repoCount: number) {
-  const height = BASE_HEIGHT + Math.max(1, repoCount) * ROW_HEIGHT;
+  const visibleRows = Math.min(Math.max(1, repoCount), MAX_VISIBLE_ROWS);
+  const height = BASE_HEIGHT + visibleRows * ROW_HEIGHT;
   try {
     await invoke("resize_main_window", { height });
   } catch {
@@ -204,6 +244,8 @@ async function openSettings() {
 }
 
 async function boot() {
+  setupRepoScroll();
+
   document.addEventListener("contextmenu", (e) => {
     e.preventDefault();
     showContextMenu(e.clientX, e.clientY);

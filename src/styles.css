@@ -64,6 +64,58 @@ body {
   text-align: right;
 }
 
+.repo-scroll-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.repo-scroll {
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.repo-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.repo-fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 22px;
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.repo-fade.visible {
+  opacity: 1;
+}
+
+.repo-fade--top {
+  top: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(22, 24, 28, 0.98) 0%,
+    rgba(22, 24, 28, 0.55) 45%,
+    rgba(22, 24, 28, 0) 100%
+  );
+}
+
+.repo-fade--bottom {
+  bottom: 0;
+  background: linear-gradient(
+    to top,
+    rgba(22, 24, 28, 0.98) 0%,
+    rgba(22, 24, 28, 0.55) 45%,
+    rgba(22, 24, 28, 0) 100%
+  );
+}
+
 .repo-list {
   list-style: none;
   margin: 0;
@@ -71,8 +123,6 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  flex: 1;
-  overflow: hidden;
 }
 
 .repo-item {
