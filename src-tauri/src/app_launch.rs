@@ -87,12 +87,19 @@ fn open_explorer(path: &str) -> Result<(), String> {
 }
 
 fn resolve_fork_executable() -> Result<PathBuf, String> {
-    let candidates = [
-        localappdata().map(|p| p.join("Fork").join("Fork.exe")),
-        program_files().map(|p| p.join("Fork").join("Fork.exe")),
-        program_files_x86().map(|p| p.join("Fork").join("Fork.exe")),
-    ];
-    find_executable(candidates.into_iter().flatten(), "Fork.exe")
+    let mut candidates = Vec::new();
+    if let Some(local) = localappdata() {
+        // Squirrel install (git-fork.com Windows): ...\Fork\current\Fork.exe
+        candidates.push(local.join("Fork").join("current").join("Fork.exe"));
+        candidates.push(local.join("Fork").join("Fork.exe"));
+    }
+    if let Some(pf) = program_files() {
+        candidates.push(pf.join("Fork").join("Fork.exe"));
+    }
+    if let Some(pf86) = program_files_x86() {
+        candidates.push(pf86.join("Fork").join("Fork.exe"));
+    }
+    find_executable(candidates, "Fork.exe")
 }
 
 fn resolve_git_bash_executable() -> Result<PathBuf, String> {
