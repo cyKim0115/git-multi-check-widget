@@ -7,6 +7,64 @@ import type { RepoConfig, ValidateResult } from "./types";
 
 let configDraft: RepoConfig = { repos: [], open_target: DEFAULT_OPEN_TARGET };
 let lastValidate: ValidateResult | null = null;
+let autostartBusy = false;
+
+async function getAutostartEnabled(): Promise<boolean> {
+  try {
+    return await invoke<boolean>("is_autostart_enabled");
+  } catch {
+    return false;
+  }
+}
+
+async function getIsDevBuild(): Promise<boolean> {
+  try {
+    return await invoke<boolean>("is_dev_build");
+  } catch {
+    return false;
+  }
+}
+
+async function renderAutostartSettings() {
+  const checkbox = $("autostart-checkbox") as HTMLInputElement;
+  const hint = $("autostart-hint");
+  const isDevBuild = await getIsDevBuild();
+
+  if (isDevBuild) {
+    checkbox.checked = false;
+    checkbox.disabled = true;
+    hint.textContent = "개발 빌드에서는 사용할 수 없습니다. 「시작.bat」으로 설치한 뒤 릴리스에서 설정하세요.";
+    hint.classList.remove("hidden");
+    return;
+  }
+
+  checkbox.disabled = autostartBusy;
+  hint.classList.add("hidden");
+  checkbox.checked = await getAutostartEnabled();
+}
+
+async function setAutostart(enabled: boolean) {
+  if (autostartBusy) return;
+  autostartBusy = true;
+  const checkbox = $("autostart-checkbox") as HTMLInputElement;
+  checkbox.disabled = true;
+
+  try {
+    if (enabled) {
+      await invoke("enable_autostart");
+    } else {
+      await invoke("disable_autostart");
+    }
+    checkbox.checked = await getAutostartEnabled();
+  } catch (e) {
+    checkbox.checked = await getAutostartEnabled();
+    window.alert(String(e));
+  } finally {
+    autostartBusy = false;
+    const isDevBuild = await getIsDevBuild();
+    checkbox.disabled = isDevBuild;
+  }
+}
 
 function $(id: string): HTMLElement {
   const el = document.getElementById(id);
@@ -236,6 +294,7 @@ async function refreshView() {
   await loadConfigDraft();
   renderSettingsList();
   renderOpenTargetSettings();
+  await renderAutostartSettings();
   resetAddForm();
 }
 
@@ -315,6 +374,11 @@ function bindUi() {
   $("btn-save-close").addEventListener("click", () => void saveAndClose());
   $("btn-cancel").addEventListener("click", () => void closeWindow());
   bindPathDropZone();
+
+  const autostartCheckbox = $("autostart-checkbox") as HTMLInputElement;
+  autostartCheckbox.addEventListener("change", () => {
+    void setAutostart(autostartCheckbox.checked);
+  });
 
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape") void closeWindow();

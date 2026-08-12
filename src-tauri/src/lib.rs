@@ -1,6 +1,12 @@
 mod app_launch;
 mod config;
 mod git_scan;
+mod install;
+
+use install::{
+    autostart_disable, autostart_enable, autostart_is_enabled, cleanup_stale_debug_autostart,
+    ensure_installed_release,
+};
 
 use config::{load_config, save_config, OpenTarget, RepoConfig, RepoEntry};
 use git_scan::{scan_one, scan_repos, validate_repo_input, RepoStatus, ScanResult, ValidateResult};
@@ -78,6 +84,26 @@ fn open_repo(path: String, open_target: OpenTarget) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn is_dev_build() -> bool {
+    cfg!(debug_assertions)
+}
+
+#[tauri::command]
+fn enable_autostart() -> Result<(), String> {
+    autostart_enable()
+}
+
+#[tauri::command]
+fn disable_autostart() -> Result<(), String> {
+    autostart_disable()
+}
+
+#[tauri::command]
+fn is_autostart_enabled() -> Result<bool, String> {
+    autostart_is_enabled()
+}
+
+#[tauri::command]
 fn resize_main_window(app: tauri::AppHandle, height: f64) -> Result<(), String> {
     let window = app
         .get_webview_window("main")
@@ -106,8 +132,17 @@ pub fn run() {
             open_settings_window,
             close_settings_window,
             open_repo,
-            resize_main_window
+            resize_main_window,
+            is_dev_build,
+            enable_autostart,
+            disable_autostart,
+            is_autostart_enabled
         ])
+        .setup(|_app| {
+            cleanup_stale_debug_autostart();
+            let _ = ensure_installed_release();
+            Ok(())
+        })
         .on_window_event(|window, event| {
             if window.label() != SETTINGS_LABEL {
                 return;

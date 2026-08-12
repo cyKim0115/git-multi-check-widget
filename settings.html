@@ -22,6 +22,15 @@
       </header>
 
       <section class="settings-section">
+        <h2 class="settings-label">시작 프로그램</h2>
+        <label class="settings-toggle" id="autostart-label">
+          <input id="autostart-checkbox" type="checkbox" />
+          <span class="settings-toggle-text">Windows 시작 시 자동 실행</span>
+        </label>
+        <p id="autostart-hint" class="settings-hint hidden"></p>
+      </section>
+
+      <section class="settings-section">
         <h2 class="settings-label">더블클릭 시 열기</h2>
         <p class="settings-hint">메인 위젯에서 저장소를 더블클릭하면 선택한 프로그램으로 엽니다.</p>
         <div id="open-target-picker" class="open-target-picker"></div>
