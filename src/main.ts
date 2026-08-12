@@ -70,6 +70,7 @@ let windowAutoSized = false;
 let userResizedWindow = false;
 let programmaticResize = false;
 let lastAutoSizedRepoCount = 0;
+let contextRepoTarget: RepoStatus | null = null;
 
 function $(id: string): HTMLElement {
   const el = document.getElementById(id);
@@ -131,10 +132,12 @@ function renderMainRepos(repos: RepoStatus[]) {
 
     if (!repo.loading && !repo.error) {
       li.classList.add("repo-item--openable");
-      li.title = "더블클릭하여 열기";
-      li.addEventListener("dblclick", (e) => {
+      li.title = "우클릭하여 메뉴";
+      li.addEventListener("contextmenu", (e) => {
         e.preventDefault();
-        void openRepoAtPath(repo.path);
+        e.stopPropagation();
+        contextRepoTarget = repo;
+        showRepoContextMenu(e.clientX, e.clientY);
       });
     }
 
@@ -295,6 +298,49 @@ async function openRepoAtPath(path: string) {
   }
 }
 
+async function openRepoInExplorer(path: string) {
+  const statusEl = $("status");
+  try {
+    await invoke("open_repo", { path, openTarget: "explorer" });
+    statusEl.textContent = "opened in explorer";
+  } catch (e) {
+    statusEl.textContent = String(e);
+  }
+}
+
+async function refreshOneRepo(name: string, path: string) {
+  const statusEl = $("status");
+  const repos = [...lastRepos];
+  const idx = repos.findIndex((r) => r.name === name && r.path === path);
+  if (idx === -1) return;
+
+  repos[idx] = { ...repos[idx], refreshing: true };
+  renderRepos(repos);
+  statusEl.textContent = "refreshing…";
+
+  try {
+    const updated = (await invoke("scan_one_repo", {
+      name,
+      path,
+      doFetch: true,
+    })) as RepoStatus;
+    repos[idx] = { ...updated, refreshing: false, loading: false };
+    renderRepos(repos);
+    statusEl.textContent = `updated ${formatTime(Math.floor(Date.now() / 1000))}`;
+  } catch (e) {
+    repos[idx] = {
+      ...repos[idx],
+      loading: false,
+      refreshing: false,
+      error: String(e),
+      badge: "ERR",
+      sync_state: "error",
+    };
+    renderRepos(repos);
+    statusEl.textContent = String(e);
+  }
+}
+
 async function loadOpenTarget() {
   try {
     const config = (await invoke("get_config")) as RepoConfig;
@@ -365,20 +411,35 @@ async function refresh(options?: { doFetch?: boolean }) {
 
 function hideContextMenu() {
   $("context-menu").classList.add("hidden");
+  $("repo-context-menu").classList.add("hidden");
   $("context-backdrop").classList.add("hidden");
+  contextRepoTarget = null;
 }
 
-function showContextMenu(x: number, y: number) {
-  const backdrop = $("context-backdrop");
-  const menu = $("context-menu");
-  backdrop.classList.remove("hidden");
-  menu.classList.remove("hidden");
-
+function positionContextMenu(menu: HTMLElement, x: number, y: number) {
   const rect = menu.getBoundingClientRect();
   const maxX = Math.max(8, window.innerWidth - rect.width - 8);
   const maxY = Math.max(8, window.innerHeight - rect.height - 8);
   menu.style.left = `${Math.min(x, maxX)}px`;
   menu.style.top = `${Math.min(y, maxY)}px`;
+}
+
+function showWidgetContextMenu(x: number, y: number) {
+  const backdrop = $("context-backdrop");
+  const menu = $("context-menu");
+  $("repo-context-menu").classList.add("hidden");
+  backdrop.classList.remove("hidden");
+  menu.classList.remove("hidden");
+  positionContextMenu(menu, x, y);
+}
+
+function showRepoContextMenu(x: number, y: number) {
+  const backdrop = $("context-backdrop");
+  const menu = $("repo-context-menu");
+  $("context-menu").classList.add("hidden");
+  backdrop.classList.remove("hidden");
+  menu.classList.remove("hidden");
+  positionContextMenu(menu, x, y);
 }
 
 async function openSettings() {
@@ -394,8 +455,10 @@ async function boot() {
   setupRepoScroll();
 
   document.addEventListener("contextmenu", (e) => {
+    if ((e.target as Element).closest(".repo-item")) return;
     e.preventDefault();
-    showContextMenu(e.clientX, e.clientY);
+    contextRepoTarget = null;
+    showWidgetContextMenu(e.clientX, e.clientY);
   });
 
   $("context-backdrop").addEventListener("click", hideContextMenu);
@@ -407,6 +470,21 @@ async function boot() {
   $("menu-quit").addEventListener("click", async () => {
     hideContextMenu();
     await invoke("quit_app");
+  });
+  $("menu-repo-open").addEventListener("click", () => {
+    const target = contextRepoTarget;
+    hideContextMenu();
+    if (target) void openRepoAtPath(target.path);
+  });
+  $("menu-repo-refresh").addEventListener("click", () => {
+    const target = contextRepoTarget;
+    hideContextMenu();
+    if (target) void refreshOneRepo(target.name, target.path);
+  });
+  $("menu-repo-explorer").addEventListener("click", () => {
+    const target = contextRepoTarget;
+    hideContextMenu();
+    if (target) void openRepoInExplorer(target.path);
   });
 
   window.addEventListener("keydown", (e) => {
