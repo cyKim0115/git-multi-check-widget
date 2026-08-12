@@ -1,5 +1,10 @@
 # Launches Git Multi-Check Widget for non-developers.
 # Rebuilds release when source is newer than the installed exe.
+# Use -ForceRebuild to always rebuild before install (agent / post-task refresh).
+
+param(
+  [switch]$ForceRebuild
+)
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
@@ -60,6 +65,7 @@ function Get-SourceStamp {
 }
 
 function Test-NeedsRebuild {
+  if ($ForceRebuild) { return $true }
   if (-not (Test-Path $ReleaseExe)) { return $true }
   $builtAt = (Get-Item $ReleaseExe).LastWriteTimeUtc
   $sourceAt = Get-SourceStamp
