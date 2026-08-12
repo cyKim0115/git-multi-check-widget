@@ -7,7 +7,7 @@ use std::os::windows::process::CommandExt;
 
 pub fn open_repo(path: &str, target: OpenTarget) -> Result<(), String> {
     let canonical = std::fs::canonicalize(path).map_err(|e| format!("경로 확인 실패: {e}"))?;
-    let path_str = canonical.to_string_lossy().to_string();
+    let path_str = normalize_path_for_spawn(&canonical);
 
     match target {
         OpenTarget::Fork => open_fork(&path_str),
@@ -16,6 +16,19 @@ pub fn open_repo(path: &str, target: OpenTarget) -> Result<(), String> {
         OpenTarget::Cursor => open_cursor(&path_str),
         OpenTarget::VsCode => open_vscode(&path_str),
         OpenTarget::Explorer => open_explorer(&path_str),
+    }
+}
+
+/// Windows `canonicalize` returns extended-length paths (`\\?\C:\...`) that
+/// some apps (notably Fork) mishandle — showing "(?)" instead of branch info.
+fn normalize_path_for_spawn(path: &Path) -> String {
+    let raw = path.to_string_lossy();
+    if let Some(rest) = raw.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{}", rest)
+    } else if let Some(rest) = raw.strip_prefix(r"\\?\") {
+        rest.to_string()
+    } else {
+        raw.into_owned()
     }
 }
 
