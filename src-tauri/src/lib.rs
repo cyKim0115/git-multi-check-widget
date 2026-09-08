@@ -11,6 +11,7 @@ use install::{
 use config::{load_config, save_config, OpenTarget, RepoConfig, RepoEntry};
 use git_scan::{scan_one, scan_repos, validate_repo_input, RepoStatus, ScanResult, ValidateResult};
 use tauri::{Emitter, Manager, WindowEvent};
+use tauri_plugin_window_state::StateFlags;
 
 const POLL_INTERVAL_MS: u64 = 300_000;
 const SETTINGS_LABEL: &str = "settings";
@@ -121,6 +122,16 @@ fn resize_main_window(app: tauri::AppHandle, height: f64) -> Result<(), String> 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // 위젯 위치만 복원한다. 창 높이는 레포 개수에 따라 프런트가 매번 다시 계산하므로
+        // (main.ts의 maybeAutoResizeWindow), 크기까지 저장하면 지난 실행의 레포 개수가
+        // 이번 실행을 덮어써 잘못된 높이로 떴다가 줄어드는 깜빡임이 생긴다.
+        // 설정 창은 tauri.conf.json의 center 동작을 유지한다.
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(StateFlags::POSITION)
+                .with_denylist(&[SETTINGS_LABEL])
+                .build(),
+        )
         .invoke_handler(tauri::generate_handler![
             get_config,
             set_config,
