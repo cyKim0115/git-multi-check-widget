@@ -58,7 +58,7 @@
 
 ### Modified approach
 
-1. **한 목록 통합**: `RepoEntry`에 `kind: git | svn` 추가. `#[serde(default)]`로 기존 `repos.json`은 git으로 읽힌다(하위 호환).
+1. **분리 섹션** (2026-09-14 사용자 지시로 변경 — 아래 Revision): 설정의 활성화 토글로 켤 때만 SVN 영역이 생긴다. Git 영역이 상단, SVN 영역이 하단이며 각 영역에 `Git` / `SVN` 라벨을 둔다. 설정은 `svn_enabled: bool` + `svn_repos: Vec<RepoEntry>`로 분리 저장하고, 둘 다 `#[serde(default)]`라 기존 `repos.json`이 그대로 읽힌다(하위 호환).
 2. **스캔 디스패치**: `svn_scan.rs`를 신설하되 결과는 기존 `RepoStatus`로 맞춘다. `scan_repos`가 `kind`로 분기.
 3. **의미 없는 필드 처리**: SVN은 `ahead` 항상 0, `sync_state`는 `synced | behind | error`만 사용. `no_upstream`/`diverged`는 SVN에서 내보내지 않는다.
 4. **CLI 부재 대응**: 개발 머신엔 설치됐지만 배포본 사용자에겐 없을 수 있다. git의 `GIT_NOT_FOUND` 패턴처럼 `svn.exe`를 못 찾으면 해당 행만 `SVN_NOT_FOUND` 오류로 표시하고 위젯 전체는 계속 동작한다. `git_program()`처럼 PATH에서 `svn.exe`를 직접 찾아 `CREATE_NO_WINDOW`로 띄운다.
@@ -73,8 +73,26 @@
 
 - SVN commit/update 실행
 - externals·lock·changelist 등 SVN 고유 세부 상태
-- SVN 전용 UI·전용 설정 목록
 - 판정 확인 전 코드 변경
+
+## Revision — 2026-09-14 (구현 직전)
+
+최초 판정은 **A안(한 목록 통합)** 이었으나, 사용자가 UI 구조를 명시적으로 지정해 아래로 변경한다.
+
+| 항목 | 최초 판정 | 변경 후 |
+|------|-----------|---------|
+| 목록 | Git/SVN 한 목록 + 행별 `kind` | **영역 분리** — 상단 Git, 하단 SVN |
+| 노출 | 항상 | **설정에서 활성화해야 SVN 영역 생성** |
+| 구분 | 행 배지 | **영역 라벨** (`Git` / `SVN`) |
+| 설정 | `repos[].kind` | `svn_enabled` + `svn_repos[]` 분리 |
+
+변경 이유: 사용자가 두 VCS를 **섞어 보지 않고 나눠 보기**를 원한다. 원격/브랜치 개념이 다른 두 VCS를
+한 목록에 섞으면 정렬·요약의 의미가 흐려지므로, 영역 분리가 오히려 표시 정직성에 유리하다.
+Alternatives 표의 B안(전면 분리)과는 다르다 — **데이터 모델(`RepoStatus`)은 계속 공유**하고
+UI 영역과 설정 목록만 나눈다. 유지비 2배 문제는 발생하지 않는다.
+
+SVN 원격 조회는 `svn status -u --quiet`를 쓰되 **폴링/수동 새로고침 시에만** 호출한다
+(git이 `do_fetch`일 때만 `fetch`하는 것과 동일). 네트워크 호출에는 스레드 기반 타임아웃을 건다.
 
 ## Follow-up
 
