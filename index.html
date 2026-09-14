@@ -14,12 +14,28 @@
         <span id="summary" class="summary" data-tauri-drag-region>—</span>
       </header>
 
-      <div id="repo-scroll-wrap" class="repo-scroll-wrap">
-        <div id="repo-scroll" class="repo-scroll">
-          <ul id="repo-list" class="repo-list" aria-label="repository status"></ul>
-        </div>
-        <div id="repo-fade-top" class="repo-fade repo-fade--top" aria-hidden="true"></div>
-        <div id="repo-fade-bottom" class="repo-fade repo-fade--bottom" aria-hidden="true"></div>
+      <div id="sections" class="sections">
+        <section class="repo-section" id="git-section">
+          <div class="section-label" data-tauri-drag-region>Git</div>
+          <div id="repo-scroll-wrap" class="repo-scroll-wrap">
+            <div id="repo-scroll" class="repo-scroll">
+              <ul id="repo-list" class="repo-list" aria-label="git repository status"></ul>
+            </div>
+            <div id="repo-fade-top" class="repo-fade repo-fade--top" aria-hidden="true"></div>
+            <div id="repo-fade-bottom" class="repo-fade repo-fade--bottom" aria-hidden="true"></div>
+          </div>
+        </section>
+
+        <section class="repo-section hidden" id="svn-section">
+          <div class="section-label" data-tauri-drag-region>SVN</div>
+          <div id="svn-scroll-wrap" class="repo-scroll-wrap">
+            <div id="svn-scroll" class="repo-scroll">
+              <ul id="svn-list" class="repo-list" aria-label="svn repository status"></ul>
+            </div>
+            <div id="svn-fade-top" class="repo-fade repo-fade--top" aria-hidden="true"></div>
+            <div id="svn-fade-bottom" class="repo-fade repo-fade--bottom" aria-hidden="true"></div>
+          </div>
+        </section>
       </div>
 
       <footer class="footer" data-tauri-drag-region>

@@ -3,7 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { formatSummaryIcons, renderStatusIcons, rowClass } from "./status-icons";
 import { DEFAULT_OPEN_TARGET } from "./open-targets";
 import type { OpenTarget } from "./open-targets";
-import type { RepoConfig, RepoEntry, RepoStatus } from "./types";
+import type { RepoConfig, RepoEntry, RepoStatus, Vcs } from "./types";
 
 const PREVIEW = new URLSearchParams(window.location.search).has("preview");
 
@@ -11,6 +11,7 @@ let openTarget: OpenTarget = DEFAULT_OPEN_TARGET;
 
 const PREVIEW_SCAN: RepoStatus[] = [
   {
+    vcs: "git",
     name: "rag",
     path: "C:\\Users\\cykim\\repo\\rag",
     branch: "main",
@@ -23,6 +24,7 @@ const PREVIEW_SCAN: RepoStatus[] = [
     error: null,
   },
   {
+    vcs: "git",
     name: "TeenipingTycoon",
     path: "C:\\Users\\cykim\\repo\\TeenipingTycoon",
     branch: "develop",
@@ -35,6 +37,7 @@ const PREVIEW_SCAN: RepoStatus[] = [
     error: null,
   },
   {
+    vcs: "git",
     name: "system-crew",
     path: "C:\\Users\\cykim\\repo\\system-crew",
     branch: "main",
@@ -48,9 +51,28 @@ const PREVIEW_SCAN: RepoStatus[] = [
   },
 ];
 
+const PREVIEW_SVN_SCAN: RepoStatus[] = [
+  {
+    vcs: "svn",
+    name: "ArtSource",
+    path: "D:\\svn\\ArtSource",
+    branch: "^/trunk/ArtSource",
+    dirty: true,
+    changed_count: 12,
+    ahead: 0,
+    behind: 4,
+    sync_state: "behind",
+    badge: "dirty ·12 · pull ·4",
+    error: null,
+  },
+];
+
+/** Fallbacks only — the real geometry is measured from the rendered DOM. */
 const BASE_HEIGHT = 72;
 const ROW_HEIGHT = 36;
+/** Row budget for a single visible section vs. two stacked ones. */
 const MAX_VISIBLE_ROWS = 5;
+const MAX_VISIBLE_ROWS_SPLIT = 4;
 const SCROLL_ACCEL_BASE = 0.07;
 const SCROLL_ACCEL_STEP = 0.035;
 const SCROLL_ACCEL_BURST_MAX = 7;
@@ -60,16 +82,14 @@ const SCROLL_MIN_VELOCITY = 0.18;
 const SCROLL_MAX_VELOCITY = 28;
 
 let scanGeneration = 0;
-let scrollFadeBound = false;
-let scrollVelocity = 0;
-let scrollBurst = 0;
-let lastWheelAt = 0;
-let scrollAnimId: number | null = null;
-let lastRepos: RepoStatus[] = [];
+let scrollBound = false;
+let lastGitRepos: RepoStatus[] = [];
+let lastSvnRepos: RepoStatus[] = [];
+let svnEnabled = false;
 let windowAutoSized = false;
 let userResizedWindow = false;
 let programmaticResize = false;
-let lastAutoSizedRepoCount = 0;
+let lastAutoSizedSignature = "";
 let contextRepoTarget: RepoStatus | null = null;
 
 function $(id: string): HTMLElement {
@@ -78,13 +98,44 @@ function $(id: string): HTMLElement {
   return el;
 }
 
+/**
+ * Git and SVN each own a scroll viewport, so the inertia state that used to be
+ * module-level is now per-area — otherwise one wheel gesture would drag both.
+ */
+type ScrollArea = {
+  scroll: HTMLElement;
+  wrap: HTMLElement;
+  fadeTop: HTMLElement;
+  fadeBottom: HTMLElement;
+  velocity: number;
+  burst: number;
+  lastWheelAt: number;
+  animId: number | null;
+};
+
+const scrollAreas: ScrollArea[] = [];
+
+function createScrollArea(prefix: string): ScrollArea {
+  return {
+    scroll: $(`${prefix}-scroll`),
+    wrap: $(`${prefix}-scroll-wrap`),
+    fadeTop: $(`${prefix}-fade-top`),
+    fadeBottom: $(`${prefix}-fade-bottom`),
+    velocity: 0,
+    burst: 0,
+    lastWheelAt: 0,
+    animId: null,
+  };
+}
+
 function formatTime(unixSeconds: number): string {
   const date = new Date(unixSeconds * 1000);
   return date.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
 }
 
-function placeholderStatus(entry: RepoEntry): RepoStatus {
+function placeholderStatus(entry: RepoEntry, vcs: Vcs): RepoStatus {
   return {
+    vcs,
     name: entry.name,
     path: entry.path,
     branch: null,
@@ -99,8 +150,8 @@ function placeholderStatus(entry: RepoEntry): RepoStatus {
   };
 }
 
-function renderMainRepos(repos: RepoStatus[]) {
-  const list = $("repo-list");
+function renderRepoList(listId: string, repos: RepoStatus[]) {
+  const list = $(listId);
   list.replaceChildren();
   for (const repo of repos) {
     const li = document.createElement("li");
@@ -143,21 +194,19 @@ function renderMainRepos(repos: RepoStatus[]) {
 
     list.append(li);
   }
-  void maybeAutoResizeWindow(repos.length || 1);
-  updateScrollFade();
 }
 
 function updateScrollFade() {
   requestAnimationFrame(() => {
-    const scroll = $("repo-scroll");
-    const fadeTop = $("repo-fade-top");
-    const fadeBottom = $("repo-fade-bottom");
-    const canScroll = scroll.scrollHeight > scroll.clientHeight + 1;
-    const atTop = scroll.scrollTop <= 1;
-    const atBottom = scroll.scrollTop + scroll.clientHeight >= scroll.scrollHeight - 1;
+    for (const area of scrollAreas) {
+      const canScroll = area.scroll.scrollHeight > area.scroll.clientHeight + 1;
+      const atTop = area.scroll.scrollTop <= 1;
+      const atBottom =
+        area.scroll.scrollTop + area.scroll.clientHeight >= area.scroll.scrollHeight - 1;
 
-    fadeTop.classList.toggle("visible", canScroll && !atTop);
-    fadeBottom.classList.toggle("visible", canScroll && !atBottom);
+      area.fadeTop.classList.toggle("visible", canScroll && !atTop);
+      area.fadeBottom.classList.toggle("visible", canScroll && !atBottom);
+    }
   });
 }
 
@@ -169,64 +218,59 @@ function clampScrollVelocity(velocity: number): number {
   return Math.max(-SCROLL_MAX_VELOCITY, Math.min(SCROLL_MAX_VELOCITY, velocity));
 }
 
-function ensureScrollAnimation(scroll: HTMLElement) {
-  if (scrollAnimId !== null) return;
+function ensureScrollAnimation(area: ScrollArea) {
+  if (area.animId !== null) return;
 
   const tick = () => {
-    if (Math.abs(scrollVelocity) < SCROLL_MIN_VELOCITY) {
-      scrollAnimId = null;
-      scrollVelocity = 0;
+    if (Math.abs(area.velocity) < SCROLL_MIN_VELOCITY) {
+      area.animId = null;
+      area.velocity = 0;
       updateScrollFade();
       return;
     }
 
-    const max = maxScrollTop(scroll);
-    const prev = scroll.scrollTop;
-    const next = Math.max(0, Math.min(max, prev + scrollVelocity));
-    scroll.scrollTop = next;
+    const max = maxScrollTop(area.scroll);
+    const prev = area.scroll.scrollTop;
+    const next = Math.max(0, Math.min(max, prev + area.velocity));
+    area.scroll.scrollTop = next;
 
     if (next !== prev) {
-      scrollVelocity *= SCROLL_FRICTION;
+      area.velocity *= SCROLL_FRICTION;
     } else {
-      scrollVelocity *= 0.4;
+      area.velocity *= 0.4;
     }
 
-    if (scroll.scrollTop <= 0 || scroll.scrollTop >= max) {
-      scrollVelocity *= 0.55;
+    if (area.scroll.scrollTop <= 0 || area.scroll.scrollTop >= max) {
+      area.velocity *= 0.55;
     }
 
     updateScrollFade();
-    scrollAnimId = requestAnimationFrame(tick);
+    area.animId = requestAnimationFrame(tick);
   };
 
-  scrollAnimId = requestAnimationFrame(tick);
+  area.animId = requestAnimationFrame(tick);
 }
 
-function currentScrollAccel(): number {
-  return SCROLL_ACCEL_BASE + scrollBurst * SCROLL_ACCEL_STEP;
-}
-
-function applyWheelScroll(scroll: HTMLElement, deltaY: number) {
+function applyWheelScroll(area: ScrollArea, deltaY: number) {
   const now = performance.now();
-  if (now - lastWheelAt < WHEEL_BURST_MS) {
-    scrollBurst = Math.min(SCROLL_ACCEL_BURST_MAX, scrollBurst + 1);
+  if (now - area.lastWheelAt < WHEEL_BURST_MS) {
+    area.burst = Math.min(SCROLL_ACCEL_BURST_MAX, area.burst + 1);
   } else {
-    scrollBurst = 0;
+    area.burst = 0;
   }
-  lastWheelAt = now;
+  area.lastWheelAt = now;
 
-  scrollVelocity = clampScrollVelocity(scrollVelocity + deltaY * currentScrollAccel());
-  ensureScrollAnimation(scroll);
+  const accel = SCROLL_ACCEL_BASE + area.burst * SCROLL_ACCEL_STEP;
+  area.velocity = clampScrollVelocity(area.velocity + deltaY * accel);
+  ensureScrollAnimation(area);
 }
 
 function setupRepoScroll() {
-  if (scrollFadeBound) return;
-  scrollFadeBound = true;
+  if (scrollBound) return;
+  scrollBound = true;
 
-  const scroll = $("repo-scroll");
-  const wrap = $("repo-scroll-wrap");
+  scrollAreas.push(createScrollArea("repo"), createScrollArea("svn"));
 
-  scroll.addEventListener("scroll", updateScrollFade, { passive: true });
   window.addEventListener("resize", () => {
     if (!programmaticResize && windowAutoSized) {
       userResizedWindow = true;
@@ -234,33 +278,85 @@ function setupRepoScroll() {
     updateScrollFade();
   });
 
-  wrap.addEventListener(
-    "wheel",
-    (e) => {
-      if (scroll.scrollHeight <= scroll.clientHeight + 1) return;
-      e.preventDefault();
-      applyWheelScroll(scroll, e.deltaY);
-    },
-    { passive: false },
-  );
+  for (const area of scrollAreas) {
+    area.scroll.addEventListener("scroll", updateScrollFade, { passive: true });
+    area.wrap.addEventListener(
+      "wheel",
+      (e) => {
+        if (area.scroll.scrollHeight <= area.scroll.clientHeight + 1) return;
+        e.preventDefault();
+        applyWheelScroll(area, e.deltaY);
+      },
+      { passive: false },
+    );
+  }
 }
 
-function renderSummary(repos: RepoStatus[]) {
+function renderSummary() {
   const summaryEl = $("summary");
-  summaryEl.replaceChildren(formatSummaryIcons(repos));
+  summaryEl.replaceChildren(formatSummaryIcons([...lastGitRepos, ...lastSvnRepos]));
 }
 
-async function maybeAutoResizeWindow(repoCount: number) {
-  if (userResizedWindow) return;
-  if (windowAutoSized && repoCount === lastAutoSizedRepoCount) return;
+function visibleRowBudget(): number {
+  return svnEnabled ? MAX_VISIBLE_ROWS_SPLIT : MAX_VISIBLE_ROWS;
+}
 
-  const visibleRows = Math.min(Math.max(1, repoCount), MAX_VISIBLE_ROWS);
-  const height = BASE_HEIGHT + visibleRows * ROW_HEIGHT;
+function visibleRows(count: number): number {
+  return Math.min(Math.max(1, count), visibleRowBudget());
+}
+
+function cssPx(value: string): number {
+  const parsed = parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/**
+ * Row height used to be a constant that undershot the real row, so the window
+ * was always a little too short and rows got clipped. Measuring the rendered
+ * DOM keeps the window height and the CSS layout agreeing on one set of numbers.
+ */
+function measureLayout(): { chrome: number; row: number; label: number; gap: number } {
+  const widget = document.querySelector<HTMLElement>(".widget");
+  const sections = $("sections");
+
+  const measuredChrome = widget ? widget.offsetHeight - sections.offsetHeight : 0;
+  const chrome = measuredChrome > 0 ? measuredChrome : BASE_HEIGHT;
+
+  const item = document.querySelector<HTMLElement>(".repo-item");
+  const row =
+    item && item.parentElement && item.offsetHeight > 0
+      ? item.offsetHeight + cssPx(getComputedStyle(item.parentElement).rowGap)
+      : ROW_HEIGHT;
+
+  const labelEl = document.querySelector<HTMLElement>(".sections--split .section-label");
+  const label = labelEl
+    ? labelEl.offsetHeight + cssPx(getComputedStyle(labelEl).marginBottom)
+    : 0;
+
+  return { chrome, row, label, gap: cssPx(getComputedStyle(sections).rowGap) };
+}
+
+async function maybeAutoResizeWindow() {
+  if (userResizedWindow) return;
+
+  const gitCount = Math.max(1, lastGitRepos.length);
+  const svnCount = Math.max(1, lastSvnRepos.length);
+  const layout = measureLayout();
+  const signature = `${gitCount}:${svnEnabled ? svnCount : 0}:${svnEnabled}:${Math.round(layout.row)}`;
+  if (windowAutoSized && signature === lastAutoSizedSignature) return;
+
+  let height = layout.chrome + visibleRows(gitCount) * layout.row;
+
+  if (svnEnabled) {
+    // Two labels appear only in split mode, plus the gap between sections.
+    height += layout.label * 2 + layout.gap + visibleRows(svnCount) * layout.row;
+  }
+
   try {
     programmaticResize = true;
     await invoke("resize_main_window", { height });
     windowAutoSized = true;
-    lastAutoSizedRepoCount = repoCount;
+    lastAutoSizedSignature = signature;
   } catch {
     /* dev without tauri */
   } finally {
@@ -268,30 +364,51 @@ async function maybeAutoResizeWindow(repoCount: number) {
   }
 }
 
-function renderRepos(repos: RepoStatus[]) {
-  lastRepos = repos;
-  renderSummary(repos);
-  renderMainRepos(repos);
+function renderAll() {
+  $("sections").classList.toggle("sections--split", svnEnabled);
+  $("svn-section").classList.toggle("hidden", !svnEnabled);
+
+  // The window height is budgeted per section, so the sections must grow in the
+  // same proportion — a plain `flex: 1` would split the space evenly instead.
+  $("git-section").style.flexGrow = String(visibleRows(lastGitRepos.length));
+  $("svn-section").style.flexGrow = String(visibleRows(lastSvnRepos.length));
+
+  renderSummary();
+  renderRepoList("repo-list", lastGitRepos);
+  if (svnEnabled) {
+    renderRepoList("svn-list", lastSvnRepos);
+  }
+
+  void maybeAutoResizeWindow();
+  updateScrollFade();
 }
 
-function findPreviousRepo(entry: RepoEntry): RepoStatus | undefined {
-  return lastRepos.find((r) => r.name === entry.name && r.path === entry.path);
+function findPrevious(previous: RepoStatus[], entry: RepoEntry): RepoStatus | undefined {
+  return previous.find((r) => r.name === entry.name && r.path === entry.path);
 }
 
-function reposForRefresh(config: RepoConfig): RepoStatus[] {
-  return config.repos.map((entry) => {
-    const prev = findPreviousRepo(entry);
+function rowsForRefresh(entries: RepoEntry[], previous: RepoStatus[], vcs: Vcs): RepoStatus[] {
+  return entries.map((entry) => {
+    const prev = findPrevious(previous, entry);
     if (prev && !prev.loading) {
       return { ...prev, refreshing: true };
     }
-    return placeholderStatus(entry);
+    return placeholderStatus(entry, vcs);
   });
 }
 
-async function openRepoAtPath(path: string) {
+/** Fork and Git Bash are git-only; an SVN row falls back to the explorer. */
+function effectiveOpenTarget(vcs: Vcs): OpenTarget {
+  if (vcs === "svn" && (openTarget === "fork" || openTarget === "git_bash")) {
+    return "explorer";
+  }
+  return openTarget;
+}
+
+async function openRepoAtPath(path: string, vcs: Vcs) {
   const statusEl = $("status");
   try {
-    await invoke("open_repo", { path, openTarget });
+    await invoke("open_repo", { path, openTarget: effectiveOpenTarget(vcs) });
     statusEl.textContent = "opened";
   } catch (e) {
     statusEl.textContent = String(e);
@@ -308,37 +425,46 @@ async function openRepoInExplorer(path: string) {
   }
 }
 
-async function refreshOneRepo(name: string, path: string) {
+function scanCommandFor(vcs: Vcs): string {
+  return vcs === "svn" ? "scan_one_svn_repo" : "scan_one_repo";
+}
+
+async function refreshOneRepo(target: RepoStatus) {
   const statusEl = $("status");
-  const repos = [...lastRepos];
-  const idx = repos.findIndex((r) => r.name === name && r.path === path);
+  const isSvn = target.vcs === "svn";
+  const rows = isSvn ? [...lastSvnRepos] : [...lastGitRepos];
+  const idx = rows.findIndex((r) => r.name === target.name && r.path === target.path);
   if (idx === -1) return;
 
-  repos[idx] = { ...repos[idx], refreshing: true };
-  renderRepos(repos);
+  rows[idx] = { ...rows[idx], refreshing: true };
+  if (isSvn) lastSvnRepos = rows;
+  else lastGitRepos = rows;
+  renderAll();
   statusEl.textContent = "refreshing…";
 
   try {
-    const updated = (await invoke("scan_one_repo", {
-      name,
-      path,
+    const updated = (await invoke(scanCommandFor(target.vcs), {
+      name: target.name,
+      path: target.path,
       doFetch: true,
     })) as RepoStatus;
-    repos[idx] = { ...updated, refreshing: false, loading: false };
-    renderRepos(repos);
+    rows[idx] = { ...updated, refreshing: false, loading: false };
     statusEl.textContent = `updated ${formatTime(Math.floor(Date.now() / 1000))}`;
   } catch (e) {
-    repos[idx] = {
-      ...repos[idx],
+    rows[idx] = {
+      ...rows[idx],
       loading: false,
       refreshing: false,
       error: String(e),
       badge: "ERR",
       sync_state: "error",
     };
-    renderRepos(repos);
     statusEl.textContent = String(e);
   }
+
+  if (isSvn) lastSvnRepos = rows;
+  else lastGitRepos = rows;
+  renderAll();
 }
 
 async function loadOpenTarget() {
@@ -350,13 +476,54 @@ async function loadOpenTarget() {
   }
 }
 
+/** Scans one section in place, re-rendering after each row like the git flow always has. */
+async function scanSection(
+  entries: RepoEntry[],
+  rows: RepoStatus[],
+  vcs: Vcs,
+  doFetch: boolean,
+  generation: number,
+  commit: (rows: RepoStatus[]) => void,
+): Promise<boolean> {
+  for (let i = 0; i < entries.length; i++) {
+    if (generation !== scanGeneration) return false;
+
+    const entry = entries[i];
+    try {
+      const updated = (await invoke(scanCommandFor(vcs), {
+        name: entry.name,
+        path: entry.path,
+        doFetch,
+      })) as RepoStatus;
+      if (generation !== scanGeneration) return false;
+      rows[i] = { ...updated, refreshing: false, loading: false };
+    } catch (e) {
+      if (generation !== scanGeneration) return false;
+      rows[i] = {
+        ...rows[i],
+        loading: false,
+        refreshing: false,
+        error: String(e),
+        badge: "ERR",
+        sync_state: "error",
+      };
+    }
+    commit(rows);
+    renderAll();
+  }
+  return true;
+}
+
 async function refresh(options?: { doFetch?: boolean }) {
   const statusEl = $("status");
   const doFetch = options?.doFetch ?? false;
   const generation = ++scanGeneration;
 
   if (PREVIEW) {
-    renderRepos(PREVIEW_SCAN);
+    svnEnabled = true;
+    lastGitRepos = PREVIEW_SCAN;
+    lastSvnRepos = PREVIEW_SVN_SCAN;
+    renderAll();
     statusEl.textContent = `updated ${formatTime(Math.floor(Date.now() / 1000))}`;
     return;
   }
@@ -369,43 +536,34 @@ async function refresh(options?: { doFetch?: boolean }) {
     return;
   }
 
-  const repos = reposForRefresh(config);
-  renderRepos(repos);
-  statusEl.textContent = repos.some((r) => r.refreshing) ? "refreshing…" : "scanning…";
+  svnEnabled = config.svn_enabled ?? false;
+  const svnEntries = svnEnabled ? (config.svn_repos ?? []) : [];
 
-  if (repos.length === 0) {
+  const gitRows = rowsForRefresh(config.repos, lastGitRepos, "git");
+  const svnRows = rowsForRefresh(svnEntries, lastSvnRepos, "svn");
+  lastGitRepos = gitRows;
+  lastSvnRepos = svnRows;
+  renderAll();
+
+  const total = gitRows.length + svnRows.length;
+  if (total === 0) {
     statusEl.textContent = "no repos";
     return;
   }
+  statusEl.textContent = [...gitRows, ...svnRows].some((r) => r.refreshing)
+    ? "refreshing…"
+    : "scanning…";
 
-  for (let i = 0; i < config.repos.length; i++) {
-    if (generation !== scanGeneration) return;
+  const gitDone = await scanSection(config.repos, gitRows, "git", doFetch, generation, (rows) => {
+    lastGitRepos = rows;
+  });
+  if (!gitDone) return;
 
-    const entry = config.repos[i];
-    try {
-      const updated = (await invoke("scan_one_repo", {
-        name: entry.name,
-        path: entry.path,
-        doFetch,
-      })) as RepoStatus;
-      if (generation !== scanGeneration) return;
-      repos[i] = { ...updated, refreshing: false, loading: false };
-      renderRepos(repos);
-    } catch (e) {
-      if (generation !== scanGeneration) return;
-      repos[i] = {
-        ...repos[i],
-        loading: false,
-        refreshing: false,
-        error: String(e),
-        badge: "ERR",
-        sync_state: "error",
-      };
-      renderRepos(repos);
-    }
-  }
+  const svnDone = await scanSection(svnEntries, svnRows, "svn", doFetch, generation, (rows) => {
+    lastSvnRepos = rows;
+  });
+  if (!svnDone) return;
 
-  if (generation !== scanGeneration) return;
   statusEl.textContent = `updated ${formatTime(Math.floor(Date.now() / 1000))}`;
 }
 
@@ -474,12 +632,12 @@ async function boot() {
   $("menu-repo-open").addEventListener("click", () => {
     const target = contextRepoTarget;
     hideContextMenu();
-    if (target) void openRepoAtPath(target.path);
+    if (target) void openRepoAtPath(target.path, target.vcs);
   });
   $("menu-repo-refresh").addEventListener("click", () => {
     const target = contextRepoTarget;
     hideContextMenu();
-    if (target) void refreshOneRepo(target.name, target.path);
+    if (target) void refreshOneRepo(target);
   });
   $("menu-repo-explorer").addEventListener("click", () => {
     const target = contextRepoTarget;

@@ -1,4 +1,4 @@
-use crate::config::RepoEntry;
+use crate::config::{RepoEntry, Vcs};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -25,6 +25,7 @@ pub enum SyncState {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RepoStatus {
+    pub vcs: Vcs,
     pub name: String,
     pub path: String,
     pub branch: Option<String>,
@@ -142,6 +143,7 @@ pub fn scan_one(entry: &RepoEntry, do_fetch: bool) -> RepoStatus {
     let path = Path::new(&entry.path);
     if !path.is_dir() {
         return RepoStatus {
+            vcs: Vcs::Git,
             name: entry.name.clone(),
             path: entry.path.clone(),
             branch: None,
@@ -157,6 +159,7 @@ pub fn scan_one(entry: &RepoEntry, do_fetch: bool) -> RepoStatus {
 
     if !path.join(".git").exists() {
         return RepoStatus {
+            vcs: Vcs::Git,
             name: entry.name.clone(),
             path: entry.path.clone(),
             branch: None,
@@ -195,6 +198,7 @@ pub fn scan_one(entry: &RepoEntry, do_fetch: bool) -> RepoStatus {
             .count() as u32
     } else {
         return RepoStatus {
+            vcs: Vcs::Git,
             name: entry.name.clone(),
             path: entry.path.clone(),
             branch,
@@ -232,6 +236,7 @@ pub fn scan_one(entry: &RepoEntry, do_fetch: bool) -> RepoStatus {
     let badge = build_badge(dirty, changed_count, ahead, behind, &sync_state);
 
     RepoStatus {
+        vcs: Vcs::Git,
         name: entry.name.clone(),
         path: entry.path.clone(),
         branch,

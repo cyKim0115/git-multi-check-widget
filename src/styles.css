@@ -64,6 +64,45 @@ body {
   text-align: right;
 }
 
+.sections {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.repo-section {
+  /* flex-grow is set per render from each section's row count (main.ts). */
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+#svn-section.hidden {
+  display: none;
+}
+
+/* A lone Git list needs no caption; the label only earns its row in split mode. */
+.section-label {
+  display: none;
+  flex: none;
+  height: 22px;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 2px;
+}
+
+.sections--split .section-label {
+  display: flex;
+}
+
 .repo-scroll-wrap {
   position: relative;
   flex: 1;
@@ -449,6 +488,15 @@ body {
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.settings-label--sub {
+  margin-top: 14px;
+  font-size: 10px;
+}
+
+#svn-settings-body.hidden {
+  display: none;
 }
 
 .settings-toggle {

@@ -2,6 +2,7 @@ mod app_launch;
 mod config;
 mod git_scan;
 mod install;
+mod svn_scan;
 
 use install::{
     autostart_disable, autostart_enable, autostart_is_enabled, cleanup_stale_debug_autostart,
@@ -45,6 +46,21 @@ fn scan_one_repo(name: String, path: String, do_fetch: bool) -> RepoStatus {
 #[tauri::command]
 fn validate_repo(input: String) -> ValidateResult {
     validate_repo_input(&input)
+}
+
+#[tauri::command]
+fn scan_one_svn_repo(name: String, path: String, do_fetch: bool) -> RepoStatus {
+    let entry = RepoEntry {
+        name,
+        path,
+        url: None,
+    };
+    svn_scan::scan_one(&entry, do_fetch)
+}
+
+#[tauri::command]
+fn validate_svn_repo(input: String) -> ValidateResult {
+    svn_scan::validate_input(&input)
 }
 
 #[tauri::command]
@@ -138,6 +154,8 @@ pub fn run() {
             scan_all_repos,
             scan_one_repo,
             validate_repo,
+            scan_one_svn_repo,
+            validate_svn_repo,
             get_poll_interval_ms,
             quit_app,
             open_settings_window,

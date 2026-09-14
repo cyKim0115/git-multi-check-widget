@@ -37,13 +37,13 @@
       </section>
 
       <section class="settings-section">
-        <h2 class="settings-label">등록된 저장소</h2>
+        <h2 class="settings-label">등록된 Git 저장소</h2>
         <ul id="settings-repo-list" class="settings-repo-list settings-repo-list--window"></ul>
         <p id="settings-empty" class="settings-hint hidden">등록된 저장소가 없습니다.</p>
       </section>
 
       <section class="settings-section">
-        <h2 class="settings-label">추가</h2>
+        <h2 class="settings-label">Git 저장소 추가</h2>
         <label class="field">
           <span>이름 (선택)</span>
           <input id="input-name" type="text" placeholder="자동: 폴더명" />
@@ -64,6 +64,39 @@
           <button id="btn-add" class="btn primary" type="button" disabled>등록</button>
         </div>
         <p id="test-result" class="test-result">테스트로 유효성을 확인하세요.</p>
+      </section>
+
+      <section class="settings-section">
+        <h2 class="settings-label">SVN</h2>
+        <label class="settings-toggle" id="svn-enabled-label">
+          <input id="svn-enabled-checkbox" type="checkbox" />
+          <span class="settings-toggle-text">SVN 저장소 추적 활성화</span>
+        </label>
+        <p class="settings-hint">켜면 위젯 하단에 SVN 전용 목록이 생깁니다. svn 명령줄 클라이언트가 필요합니다.</p>
+
+        <div id="svn-settings-body" class="hidden">
+          <h3 class="settings-label settings-label--sub">등록된 SVN 작업본</h3>
+          <ul id="settings-svn-list" class="settings-repo-list settings-repo-list--window"></ul>
+          <p id="settings-svn-empty" class="settings-hint hidden">등록된 SVN 작업본이 없습니다.</p>
+
+          <h3 class="settings-label settings-label--sub">SVN 작업본 추가</h3>
+          <label class="field">
+            <span>이름 (선택)</span>
+            <input id="input-svn-name" type="text" placeholder="자동: 폴더명" />
+          </label>
+          <label class="field">
+            <span>작업본 폴더 경로</span>
+            <div id="svn-path-drop-zone" class="path-drop-zone">
+              <input id="input-svn-path" type="text" placeholder="D:\svn\MyProject" />
+              <p class="path-drop-hint">폴더를 여기로 끌어다 놓으면 경로가 입력됩니다</p>
+            </div>
+          </label>
+          <div class="settings-actions">
+            <button id="btn-svn-test" class="btn secondary" type="button">테스트</button>
+            <button id="btn-svn-add" class="btn primary" type="button" disabled>등록</button>
+          </div>
+          <p id="svn-test-result" class="test-result">테스트로 유효성을 확인하세요.</p>
+        </div>
       </section>
 
       <footer class="settings-footer settings-footer--window">

@@ -3,11 +3,63 @@ import { emit, listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { normalizeOpenTarget, renderOpenTargetPicker } from "./open-target-picker";
 import { DEFAULT_OPEN_TARGET } from "./open-targets";
-import type { RepoConfig, ValidateResult } from "./types";
+import type { RepoConfig, RepoEntry, ValidateResult, Vcs } from "./types";
 
-let configDraft: RepoConfig = { repos: [], open_target: DEFAULT_OPEN_TARGET };
-let lastValidate: ValidateResult | null = null;
+let configDraft: RepoConfig = {
+  repos: [],
+  open_target: DEFAULT_OPEN_TARGET,
+  svn_enabled: false,
+  svn_repos: [],
+};
 let autostartBusy = false;
+
+/**
+ * Git and SVN keep separate lists and separate add forms, so every list/form
+ * helper is addressed by kind instead of being duplicated.
+ */
+type KindUi = {
+  listId: string;
+  emptyId: string;
+  nameInputId: string;
+  pathInputId: string;
+  addBtnId: string;
+  resultId: string;
+  dropZoneId: string;
+  validateCommand: string;
+};
+
+const UI: Record<Vcs, KindUi> = {
+  git: {
+    listId: "settings-repo-list",
+    emptyId: "settings-empty",
+    nameInputId: "input-name",
+    pathInputId: "input-url",
+    addBtnId: "btn-add",
+    resultId: "test-result",
+    dropZoneId: "path-drop-zone",
+    validateCommand: "validate_repo",
+  },
+  svn: {
+    listId: "settings-svn-list",
+    emptyId: "settings-svn-empty",
+    nameInputId: "input-svn-name",
+    pathInputId: "input-svn-path",
+    addBtnId: "btn-svn-add",
+    resultId: "svn-test-result",
+    dropZoneId: "svn-path-drop-zone",
+    validateCommand: "validate_svn_repo",
+  },
+};
+
+const lastValidate: Record<Vcs, ValidateResult | null> = { git: null, svn: null };
+
+function entriesFor(kind: Vcs): RepoEntry[] {
+  if (kind === "svn") {
+    configDraft.svn_repos ??= [];
+    return configDraft.svn_repos;
+  }
+  return configDraft.repos;
+}
 
 async function getAutostartEnabled(): Promise<boolean> {
   try {
@@ -84,12 +136,13 @@ function showBootError(message: string) {
   });
 }
 
-function reorderRepos(fromIndex: number, toIndex: number) {
+function reorderEntries(kind: Vcs, fromIndex: number, toIndex: number) {
   if (fromIndex === toIndex) return;
-  const [entry] = configDraft.repos.splice(fromIndex, 1);
+  const entries = entriesFor(kind);
+  const [entry] = entries.splice(fromIndex, 1);
   let insertAt = toIndex;
   if (toIndex > fromIndex) insertAt -= 1;
-  configDraft.repos.splice(insertAt, 0, entry);
+  entries.splice(insertAt, 0, entry);
 }
 
 function getRepoDropIndex(list: HTMLElement, clientY: number): number {
@@ -101,12 +154,12 @@ function getRepoDropIndex(list: HTMLElement, clientY: number): number {
   return items.length;
 }
 
-function bindRepoReorderHandle(handle: HTMLButtonElement, fromIndex: number) {
+function bindRepoReorderHandle(kind: Vcs, handle: HTMLButtonElement, fromIndex: number) {
   handle.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
     e.preventDefault();
 
-    const list = $("settings-repo-list");
+    const list = $(UI[kind].listId);
     const pointerId = e.pointerId;
     const items = () => [...list.querySelectorAll<HTMLElement>(".settings-repo-item")];
     let dropIndex = fromIndex;
@@ -141,8 +194,8 @@ function bindRepoReorderHandle(handle: HTMLButtonElement, fromIndex: number) {
 
       dropIndex = getRepoDropIndex(list, upEvent.clientY);
       if (dropIndex === fromIndex) return;
-      reorderRepos(fromIndex, dropIndex);
-      renderSettingsList();
+      reorderEntries(kind, fromIndex, dropIndex);
+      renderSettingsList(kind);
     };
 
     window.addEventListener("pointermove", onMove);
@@ -150,18 +203,20 @@ function bindRepoReorderHandle(handle: HTMLButtonElement, fromIndex: number) {
   });
 }
 
-function renderSettingsList() {
-  const list = $("settings-repo-list");
-  const empty = $("settings-empty");
+function renderSettingsList(kind: Vcs) {
+  const ui = UI[kind];
+  const list = $(ui.listId);
+  const empty = $(ui.emptyId);
+  const entries = entriesFor(kind);
   list.replaceChildren();
 
-  if (configDraft.repos.length === 0) {
+  if (entries.length === 0) {
     empty.classList.remove("hidden");
     return;
   }
   empty.classList.add("hidden");
 
-  configDraft.repos.forEach((repo, index) => {
+  entries.forEach((repo, index) => {
     const li = document.createElement("li");
     li.className = "settings-repo-item";
     li.dataset.index = String(index);
@@ -171,7 +226,7 @@ function renderSettingsList() {
     dragHandle.className = "repo-drag-handle";
     dragHandle.setAttribute("aria-label", `${repo.name} 순서 변경`);
     dragHandle.textContent = "⋮⋮";
-    bindRepoReorderHandle(dragHandle, index);
+    bindRepoReorderHandle(kind, dragHandle, index);
 
     const meta = document.createElement("div");
     meta.className = "settings-repo-meta";
@@ -196,8 +251,8 @@ function renderSettingsList() {
     remove.className = "btn danger small";
     remove.textContent = "삭제";
     remove.addEventListener("click", () => {
-      configDraft.repos.splice(index, 1);
-      renderSettingsList();
+      entriesFor(kind).splice(index, 1);
+      renderSettingsList(kind);
     });
 
     actions.append(remove);
@@ -206,18 +261,21 @@ function renderSettingsList() {
   });
 }
 
-function resetAddForm() {
-  ($("input-name") as HTMLInputElement).value = "";
-  ($("input-url") as HTMLInputElement).value = "";
-  ($("btn-add") as HTMLButtonElement).disabled = true;
-  lastValidate = null;
-  $("test-result").textContent = "테스트로 유효성을 확인하세요.";
-  $("test-result").className = "test-result";
+function resetAddForm(kind: Vcs) {
+  const ui = UI[kind];
+  ($(ui.nameInputId) as HTMLInputElement).value = "";
+  ($(ui.pathInputId) as HTMLInputElement).value = "";
+  ($(ui.addBtnId) as HTMLButtonElement).disabled = true;
+  lastValidate[kind] = null;
+  $(ui.resultId).textContent = "테스트로 유효성을 확인하세요.";
+  $(ui.resultId).className = "test-result";
 }
 
 async function loadConfigDraft() {
   configDraft = (await invoke("get_config")) as RepoConfig;
   configDraft.open_target = normalizeOpenTarget(configDraft.open_target);
+  configDraft.svn_enabled ??= false;
+  configDraft.svn_repos ??= [];
 }
 
 function renderOpenTargetSettings() {
@@ -226,24 +284,31 @@ function renderOpenTargetSettings() {
   });
 }
 
-async function runTest() {
-  const input = ($("input-url") as HTMLInputElement).value.trim();
-  const resultEl = $("test-result");
-  const addBtn = $("btn-add") as HTMLButtonElement;
+function renderSvnSettings() {
+  const checkbox = $("svn-enabled-checkbox") as HTMLInputElement;
+  checkbox.checked = configDraft.svn_enabled ?? false;
+  $("svn-settings-body").classList.toggle("hidden", !checkbox.checked);
+}
+
+async function runTest(kind: Vcs) {
+  const ui = UI[kind];
+  const input = ($(ui.pathInputId) as HTMLInputElement).value.trim();
+  const resultEl = $(ui.resultId);
+  const addBtn = $(ui.addBtnId) as HTMLButtonElement;
   resultEl.textContent = "테스트 중…";
   resultEl.className = "test-result pending";
   addBtn.disabled = true;
-  lastValidate = null;
+  lastValidate[kind] = null;
 
   try {
-    const result = (await invoke("validate_repo", { input })) as ValidateResult;
-    lastValidate = result;
+    const result = (await invoke(ui.validateCommand, { input })) as ValidateResult;
+    lastValidate[kind] = result;
     resultEl.textContent = result.message;
     resultEl.className = `test-result ${result.ok ? "ok" : "fail"}`;
 
     if (result.ok) {
       addBtn.disabled = false;
-      const nameInput = $("input-name") as HTMLInputElement;
+      const nameInput = $(ui.nameInputId) as HTMLInputElement;
       if (!nameInput.value.trim() && result.suggested_name) {
         nameInput.value = result.suggested_name;
       }
@@ -254,26 +319,25 @@ async function runTest() {
   }
 }
 
-function addRepoFromForm() {
-  if (!lastValidate?.ok || !lastValidate.resolved_path) return;
+function addRepoFromForm(kind: Vcs) {
+  const ui = UI[kind];
+  const validated = lastValidate[kind];
+  if (!validated?.ok || !validated.resolved_path) return;
 
-  const nameInput = ($("input-name") as HTMLInputElement).value.trim();
-  const name = nameInput || lastValidate.suggested_name || "repo";
-  const path = lastValidate.resolved_path;
+  const nameInput = ($(ui.nameInputId) as HTMLInputElement).value.trim();
+  const name = nameInput || validated.suggested_name || "repo";
+  const path = validated.resolved_path;
+  const entries = entriesFor(kind);
 
-  if (configDraft.repos.some((r) => r.path.toLowerCase() === path.toLowerCase())) {
-    $("test-result").textContent = "이미 등록된 경로입니다.";
-    $("test-result").className = "test-result fail";
+  if (entries.some((r) => r.path.toLowerCase() === path.toLowerCase())) {
+    $(ui.resultId).textContent = "이미 등록된 경로입니다.";
+    $(ui.resultId).className = "test-result fail";
     return;
   }
 
-  configDraft.repos.push({
-    name,
-    path,
-    url: lastValidate.remote_url,
-  });
-  renderSettingsList();
-  resetAddForm();
+  entries.push({ name, path, url: validated.remote_url });
+  renderSettingsList(kind);
+  resetAddForm(kind);
 }
 
 async function closeWindow() {
@@ -292,10 +356,13 @@ async function saveAndClose() {
 
 async function refreshView() {
   await loadConfigDraft();
-  renderSettingsList();
+  renderSettingsList("git");
+  renderSettingsList("svn");
   renderOpenTargetSettings();
+  renderSvnSettings();
   await renderAutostartSettings();
-  resetAddForm();
+  resetAddForm("git");
+  resetAddForm("svn");
 }
 
 function isPointInElement(el: HTMLElement, x: number, y: number): boolean {
@@ -311,25 +378,31 @@ function isPointInElement(el: HTMLElement, x: number, y: number): boolean {
   );
 }
 
-function applyDroppedPath(path: string) {
-  const input = $("input-url") as HTMLInputElement;
-  input.value = path;
-  ($("btn-add") as HTMLButtonElement).disabled = true;
-  lastValidate = null;
-  $("test-result").textContent = "드롭된 경로를 테스트 중…";
-  $("test-result").className = "test-result pending";
-  void runTest();
+function applyDroppedPath(kind: Vcs, path: string) {
+  const ui = UI[kind];
+  ($(ui.pathInputId) as HTMLInputElement).value = path;
+  ($(ui.addBtnId) as HTMLButtonElement).disabled = true;
+  lastValidate[kind] = null;
+  $(ui.resultId).textContent = "드롭된 경로를 테스트 중…";
+  $(ui.resultId).className = "test-result pending";
+  void runTest(kind);
 }
 
-function bindPathDropZone() {
-  const zone = $("path-drop-zone");
-  let dragOverZone = false;
+/** Both add forms accept folder drops, so the drop is routed by hit-test. */
+function bindPathDropZones() {
+  const zones = (Object.keys(UI) as Vcs[]).map((kind) => ({
+    kind,
+    el: $(UI[kind].dropZoneId),
+    active: false,
+  }));
 
-  const setActive = (active: boolean) => {
-    if (dragOverZone === active) return;
-    dragOverZone = active;
-    zone.classList.toggle("path-drop-zone--active", active);
+  const setActive = (zone: (typeof zones)[number], active: boolean) => {
+    if (zone.active === active) return;
+    zone.active = active;
+    zone.el.classList.toggle("path-drop-zone--active", active);
   };
+
+  const visible = (zone: (typeof zones)[number]) => zone.el.offsetParent !== null;
 
   void getCurrentWebview()
     .onDragDropEvent((event) => {
@@ -338,30 +411,33 @@ function bindPathDropZone() {
       if (payload.type === "enter" || payload.type === "over") {
         const position = "position" in payload ? payload.position : null;
         if (position) {
-          setActive(isPointInElement(zone, position.x, position.y));
+          for (const zone of zones) {
+            setActive(zone, visible(zone) && isPointInElement(zone.el, position.x, position.y));
+          }
         }
         return;
       }
 
       if (payload.type === "leave") {
-        setActive(false);
+        zones.forEach((zone) => setActive(zone, false));
         return;
       }
 
       if (payload.type !== "drop") return;
 
-      setActive(false);
       const position = payload.position;
-      if (!isPointInElement(zone, position.x, position.y)) return;
+      const hit = zones.find((zone) => visible(zone) && isPointInElement(zone.el, position.x, position.y));
+      zones.forEach((zone) => setActive(zone, false));
+      if (!hit) return;
 
       const path = payload.paths[0];
       if (!path) {
-        $("test-result").textContent = "드롭된 항목에서 경로를 읽을 수 없습니다.";
-        $("test-result").className = "test-result fail";
+        $(UI[hit.kind].resultId).textContent = "드롭된 항목에서 경로를 읽을 수 없습니다.";
+        $(UI[hit.kind].resultId).className = "test-result fail";
         return;
       }
 
-      applyDroppedPath(path);
+      applyDroppedPath(hit.kind, path);
     })
     .catch(() => {
       /* browser preview without Tauri webview */
@@ -369,11 +445,19 @@ function bindPathDropZone() {
 }
 
 function bindUi() {
-  $("btn-test").addEventListener("click", () => void runTest());
-  $("btn-add").addEventListener("click", () => addRepoFromForm());
+  $("btn-test").addEventListener("click", () => void runTest("git"));
+  $("btn-add").addEventListener("click", () => addRepoFromForm("git"));
+  $("btn-svn-test").addEventListener("click", () => void runTest("svn"));
+  $("btn-svn-add").addEventListener("click", () => addRepoFromForm("svn"));
   $("btn-save-close").addEventListener("click", () => void saveAndClose());
   $("btn-cancel").addEventListener("click", () => void closeWindow());
-  bindPathDropZone();
+  bindPathDropZones();
+
+  const svnCheckbox = $("svn-enabled-checkbox") as HTMLInputElement;
+  svnCheckbox.addEventListener("change", () => {
+    configDraft.svn_enabled = svnCheckbox.checked;
+    renderSvnSettings();
+  });
 
   const autostartCheckbox = $("autostart-checkbox") as HTMLInputElement;
   autostartCheckbox.addEventListener("change", () => {

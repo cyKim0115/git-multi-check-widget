@@ -14,6 +14,15 @@ pub enum OpenTarget {
     Explorer,
 }
 
+/// Which version control system a repository row is backed by.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum Vcs {
+    #[default]
+    Git,
+    Svn,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RepoEntry {
     pub name: String,
@@ -27,6 +36,11 @@ pub struct RepoConfig {
     pub repos: Vec<RepoEntry>,
     #[serde(default)]
     pub open_target: OpenTarget,
+    /// SVN section stays hidden until the user turns it on in settings.
+    #[serde(default)]
+    pub svn_enabled: bool,
+    #[serde(default)]
+    pub svn_repos: Vec<RepoEntry>,
 }
 
 impl Default for RepoConfig {
@@ -34,6 +48,8 @@ impl Default for RepoConfig {
         Self {
             repos: Vec::new(),
             open_target: OpenTarget::default(),
+            svn_enabled: false,
+            svn_repos: Vec::new(),
         }
     }
 }
@@ -79,6 +95,8 @@ fn seed_config() -> RepoConfig {
             },
         ],
         open_target: OpenTarget::default(),
+        svn_enabled: false,
+        svn_repos: Vec::new(),
     }
 }
 

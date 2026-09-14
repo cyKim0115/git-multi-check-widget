@@ -9,6 +9,8 @@ export type SyncState =
 
 import type { OpenTarget } from "./open-targets";
 
+export type Vcs = "git" | "svn";
+
 export type RepoEntry = {
   name: string;
   path: string;
@@ -18,9 +20,13 @@ export type RepoEntry = {
 export type RepoConfig = {
   repos: RepoEntry[];
   open_target?: OpenTarget;
+  /** SVN section stays hidden until switched on in settings. */
+  svn_enabled?: boolean;
+  svn_repos?: RepoEntry[];
 };
 
 export type RepoStatus = {
+  vcs: Vcs;
   name: string;
   path: string;
   branch: string | null;
