@@ -68,10 +68,11 @@
 Shared 4-role pack (submodule: `.cursor/system-crew`).
 
 - Update pack: `git submodule update --remote .cursor/system-crew`
-- Refresh Cursor rules: `powershell -File .cursor/system-crew/scripts/sync-to-project.ps1`
+- Refresh Cursor rules: `powershell -File .cursor/system-crew/scripts/sync-to-project.ps1` (`-EmitAgents` for role subagents)
 - Workflow: `.cursor/system-crew/workflows/from-reference.md`
 - Idea evaluation: `.cursor/system-crew/workflows/idea-evaluation.md`
-- Roles: Producer → Systems Analyst → Implementer → Fidelity QA
+- Tuning / feedback / ideation: `.cursor/system-crew/workflows/{tuning,feedback,ideation}.md`
+- Roles: Producer → Systems Analyst → Implementer → Fidelity QA (readonly checker)
 
 Project-only overrides: `.cursor/rules/local/`
 <!-- system-crew:end -->
