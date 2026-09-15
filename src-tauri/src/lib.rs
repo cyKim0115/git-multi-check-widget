@@ -135,6 +135,16 @@ fn resize_main_window(app: tauri::AppHandle, height: f64) -> Result<(), String> 
     Ok(())
 }
 
+/// The setting lives in the config, but the OS flag has to be pushed onto the
+/// live window, so settings applies it right after saving and startup replays it.
+#[tauri::command]
+fn set_always_on_top(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "main window not found".to_string())?;
+    window.set_always_on_top(enabled).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -165,11 +175,17 @@ pub fn run() {
             is_dev_build,
             enable_autostart,
             disable_autostart,
-            is_autostart_enabled
+            is_autostart_enabled,
+            set_always_on_top
         ])
-        .setup(|_app| {
+        .setup(|app| {
             cleanup_stale_debug_autostart();
             let _ = ensure_installed_release();
+            // tauri.conf.json pins the window to always-on-top, so a user who
+            // turned it off is restored here before the webview paints.
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_always_on_top(load_config().always_on_top);
+            }
             Ok(())
         })
         .on_window_event(|window, event| {

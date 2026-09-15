@@ -31,6 +31,12 @@ pub struct RepoEntry {
     pub url: Option<String>,
 }
 
+/// Widgets shipped as always-on-top, so a config written before the setting
+/// existed must keep that behaviour instead of falling back to `false`.
+fn default_always_on_top() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RepoConfig {
     pub repos: Vec<RepoEntry>,
@@ -41,6 +47,9 @@ pub struct RepoConfig {
     pub svn_enabled: bool,
     #[serde(default)]
     pub svn_repos: Vec<RepoEntry>,
+    /// Off means the widget behaves like a normal window and can go behind others.
+    #[serde(default = "default_always_on_top")]
+    pub always_on_top: bool,
 }
 
 impl Default for RepoConfig {
@@ -50,6 +59,7 @@ impl Default for RepoConfig {
             open_target: OpenTarget::default(),
             svn_enabled: false,
             svn_repos: Vec::new(),
+            always_on_top: default_always_on_top(),
         }
     }
 }
@@ -97,6 +107,7 @@ fn seed_config() -> RepoConfig {
         open_target: OpenTarget::default(),
         svn_enabled: false,
         svn_repos: Vec::new(),
+        always_on_top: default_always_on_top(),
     }
 }
 

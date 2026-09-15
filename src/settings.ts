@@ -10,6 +10,7 @@ let configDraft: RepoConfig = {
   open_target: DEFAULT_OPEN_TARGET,
   svn_enabled: false,
   svn_repos: [],
+  always_on_top: true,
 };
 let autostartBusy = false;
 
@@ -276,12 +277,18 @@ async function loadConfigDraft() {
   configDraft.open_target = normalizeOpenTarget(configDraft.open_target);
   configDraft.svn_enabled ??= false;
   configDraft.svn_repos ??= [];
+  configDraft.always_on_top ??= true;
 }
 
 function renderOpenTargetSettings() {
   renderOpenTargetPicker($("open-target-picker"), configDraft.open_target ?? DEFAULT_OPEN_TARGET, (target) => {
     configDraft.open_target = target;
   });
+}
+
+function renderAlwaysOnTopSettings() {
+  const checkbox = $("always-on-top-checkbox") as HTMLInputElement;
+  checkbox.checked = configDraft.always_on_top ?? true;
 }
 
 function renderSvnSettings() {
@@ -350,6 +357,12 @@ async function closeWindow() {
 
 async function saveAndClose() {
   await invoke("set_config", { config: configDraft });
+  // 취소로 되돌릴 수 있어야 하므로, 창 플래그는 체크 즉시가 아니라 저장할 때 밀어 넣는다.
+  try {
+    await invoke("set_always_on_top", { enabled: configDraft.always_on_top ?? true });
+  } catch {
+    /* browser preview */
+  }
   await emit("config-saved");
   await closeWindow();
 }
@@ -359,6 +372,7 @@ async function refreshView() {
   renderSettingsList("git");
   renderSettingsList("svn");
   renderOpenTargetSettings();
+  renderAlwaysOnTopSettings();
   renderSvnSettings();
   await renderAutostartSettings();
   resetAddForm("git");
@@ -452,6 +466,11 @@ function bindUi() {
   $("btn-save-close").addEventListener("click", () => void saveAndClose());
   $("btn-cancel").addEventListener("click", () => void closeWindow());
   bindPathDropZones();
+
+  const alwaysOnTopCheckbox = $("always-on-top-checkbox") as HTMLInputElement;
+  alwaysOnTopCheckbox.addEventListener("change", () => {
+    configDraft.always_on_top = alwaysOnTopCheckbox.checked;
+  });
 
   const svnCheckbox = $("svn-enabled-checkbox") as HTMLInputElement;
   svnCheckbox.addEventListener("change", () => {

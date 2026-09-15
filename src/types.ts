@@ -23,6 +23,8 @@ export type RepoConfig = {
   /** SVN section stays hidden until switched on in settings. */
   svn_enabled?: boolean;
   svn_repos?: RepoEntry[];
+  /** Off means the widget behaves like a normal window and can go behind others. */
+  always_on_top?: boolean;
 };
 
 export type RepoStatus = {
