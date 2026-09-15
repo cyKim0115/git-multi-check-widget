@@ -13,6 +13,27 @@ let configDraft: RepoConfig = {
   always_on_top: true,
 };
 let autostartBusy = false;
+/**
+ * 창 플래그는 체크 즉시 반영하지만 config는 저장할 때만 쓴다. 취소로 초안을
+ * 버리면 살아 있는 창도 이 값으로 되돌린다. 설정 로드 전에는 null이다.
+ */
+let savedAlwaysOnTop: boolean | null = null;
+
+async function applyAlwaysOnTop(enabled: boolean) {
+  try {
+    await invoke("set_always_on_top", { enabled });
+  } catch {
+    /* browser preview */
+  }
+}
+
+/** 저장하지 않고 닫는 모든 경로(취소·Esc·창 X)에서 창 플래그를 되돌린다. */
+async function revertAlwaysOnTop() {
+  if (savedAlwaysOnTop === null) return;
+  if ((configDraft.always_on_top ?? true) === savedAlwaysOnTop) return;
+  configDraft.always_on_top = savedAlwaysOnTop;
+  await applyAlwaysOnTop(savedAlwaysOnTop);
+}
 
 /**
  * Git and SVN keep separate lists and separate add forms, so every list/form
@@ -278,6 +299,7 @@ async function loadConfigDraft() {
   configDraft.svn_enabled ??= false;
   configDraft.svn_repos ??= [];
   configDraft.always_on_top ??= true;
+  savedAlwaysOnTop = configDraft.always_on_top;
 }
 
 function renderOpenTargetSettings() {
@@ -348,6 +370,7 @@ function addRepoFromForm(kind: Vcs) {
 }
 
 async function closeWindow() {
+  await revertAlwaysOnTop();
   try {
     await invoke("close_settings_window");
   } catch {
@@ -357,12 +380,7 @@ async function closeWindow() {
 
 async function saveAndClose() {
   await invoke("set_config", { config: configDraft });
-  // 취소로 되돌릴 수 있어야 하므로, 창 플래그는 체크 즉시가 아니라 저장할 때 밀어 넣는다.
-  try {
-    await invoke("set_always_on_top", { enabled: configDraft.always_on_top ?? true });
-  } catch {
-    /* browser preview */
-  }
+  savedAlwaysOnTop = configDraft.always_on_top ?? true;
   await emit("config-saved");
   await closeWindow();
 }
@@ -470,6 +488,7 @@ function bindUi() {
   const alwaysOnTopCheckbox = $("always-on-top-checkbox") as HTMLInputElement;
   alwaysOnTopCheckbox.addEventListener("change", () => {
     configDraft.always_on_top = alwaysOnTopCheckbox.checked;
+    void applyAlwaysOnTop(alwaysOnTopCheckbox.checked);
   });
 
   const svnCheckbox = $("svn-enabled-checkbox") as HTMLInputElement;
@@ -494,6 +513,9 @@ async function boot() {
     bindUi();
     await listen("settings-open", () => {
       void refreshView();
+    });
+    await listen("settings-cancelled", () => {
+      void revertAlwaysOnTop();
     });
   } catch (e) {
     showBootError(String(e));

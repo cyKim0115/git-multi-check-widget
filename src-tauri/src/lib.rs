@@ -194,6 +194,8 @@ pub fn run() {
             }
             if let WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
+                // 창 X는 취소와 같다. 설정이 즉시 반영해 둔 창 플래그를 되돌릴 기회를 준다.
+                let _ = window.emit("settings-cancelled", ());
                 let _ = window.hide();
             }
         })
