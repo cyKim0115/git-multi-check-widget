@@ -619,7 +619,19 @@ async function boot() {
     showWidgetContextMenu(e.clientX, e.clientY);
   });
 
-  $("context-backdrop").addEventListener("click", hideContextMenu);
+  const backdrop = $("context-backdrop");
+  // pointerdown rather than click: a press that lands on the backdrop dismisses
+  // the menu even when the pointer drifts before release.
+  backdrop.addEventListener("pointerdown", (e) => {
+    if (e.target === backdrop) hideContextMenu();
+  });
+
+  // The menus sit inside the backdrop, so their own presses must not reach the
+  // dismiss handler above.
+  for (const menu of [$("context-menu"), $("repo-context-menu")]) {
+    menu.addEventListener("pointerdown", (e) => e.stopPropagation());
+  }
+
   $("menu-settings").addEventListener("click", () => void openSettings());
   $("menu-refresh").addEventListener("click", () => {
     hideContextMenu();
@@ -647,6 +659,15 @@ async function boot() {
 
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape") hideContextMenu();
+  });
+
+  // A click on another window never reaches the backdrop, so losing focus is the
+  // only signal that the menu should go away.
+  window.addEventListener("blur", hideContextMenu);
+  window.addEventListener("click", hideContextMenu);
+  window.addEventListener("resize", () => {
+    // Auto-fitting the window height must not close the menu on its own.
+    if (!programmaticResize) hideContextMenu();
   });
 
   try {
