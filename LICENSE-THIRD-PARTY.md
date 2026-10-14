@@ -1,6 +1,6 @@
 # Third-Party Licenses
 
-This file lists licenses for materials included in **Git Multi-Check Widget** that are
+This file lists licenses for materials included in **Repo Multi-Check Widget** that are
 not covered by the project's own source-code license (if any).
 
 > **Separation:** The application source code in this repository (Rust, TypeScript, HTML,

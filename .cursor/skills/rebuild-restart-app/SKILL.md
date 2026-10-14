@@ -1,13 +1,13 @@
 ---
 name: rebuild-restart-app
 description: >-
-  Stops the running Git Multi-Check Widget process, force-rebuilds the Tauri
+  Stops the running Repo Multi-Check Widget process, force-rebuilds the Tauri
   release, reinstalls to LOCALAPPDATA, and restarts. Use when implementation
   work is done and the user wants the installed app refreshed, or when they
   mention rebuild-restart / 빌드 최신화 / 재시작 / 작업 완료 후 실행.
 ---
 
-# Git Multi-Check Widget — rebuild & restart
+# Repo Multi-Check Widget — rebuild & restart
 
 구현 작업이 끝난 뒤 **설치본을 최신 코드로 갱신**할 때 사용한다.
 
@@ -21,14 +21,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/rebuild-restart.ps
 
 ## 절차 (스크립트가 수행)
 
-1. `git-multi-check-widget` 프로세스 종료 (`Stop-RunningWidget`)
+1. `repo-multi-check-widget` 프로세스 종료 (`Stop-RunningWidget`, 이름 바꾸기 전 `git-multi-check-widget`도 함께)
 2. `npm run build:app` (VS Build Tools `vcvars64.bat` 경유, 필요 시 `npm install`)
-3. `src-tauri/target/release/git-multi-check-widget.exe` → `%LOCALAPPDATA%\GitMultiCheckWidget\`
+3. `src-tauri/target/release/repo-multi-check-widget.exe` → `%LOCALAPPDATA%\RepoMultiCheckWidget\`
 4. 설치 exe 실행
 
 ## 성공 확인
 
-- `Get-Process -Name git-multi-check-widget` — 프로세스 1개 이상
+- `Get-Process -Name repo-multi-check-widget` — 프로세스 1개 이상
 - Release exe `LastWriteTime`이 방금 빌드 시각 근처
 - 스크립트 exit code `0`
 

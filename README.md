@@ -1,11 +1,13 @@
-# Git Multi-Check Widget
+# Repo Multi-Check Widget
 
 Windows 바탕화면용 위젯 — 여러 Git·SVN 저장소의 **브랜치·변경·동기화 상태**를 한눈에 확인하고, 밀린 커밋은 버튼 하나로 받습니다.
 
 ## 실행
 
-- **일반:** 프로젝트 폴더의 `시작.bat` 더블클릭 → `%LOCALAPPDATA%\GitMultiCheckWidget\` 설치본 실행
+- **일반:** 프로젝트 폴더의 `시작.bat` 더블클릭 → `%LOCALAPPDATA%\RepoMultiCheckWidget\` 설치본 실행
 - **개발:** `npm install` 후 `npm run tauri dev`
+
+> 예전 이름은 `git-multi-check-widget`입니다. 새 버전을 처음 실행하면 등록한 저장소 목록(`%LOCALAPPDATA%\GitMultiCheckWidget\repos.json`), 위젯 위치, 시작 프로그램 등록을 새 이름으로 옮겨 씁니다. 옛 폴더는 그대로 남으니 확인 뒤 지워도 됩니다.
 
 ## 화면과 사용법
 
