@@ -3,6 +3,7 @@ mod config;
 mod git_scan;
 mod install;
 mod svn_scan;
+mod tray;
 
 use install::{
     autostart_disable, autostart_enable, autostart_is_enabled, cleanup_stale_debug_autostart,
@@ -179,6 +180,7 @@ pub fn run() {
             set_always_on_top
         ])
         .setup(|app| {
+            tray::install(app)?;
             cleanup_stale_debug_autostart();
             let _ = ensure_installed_release();
             // tauri.conf.json pins the window to always-on-top, so a user who
