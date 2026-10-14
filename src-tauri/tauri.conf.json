@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Git Multi-Check Widget",
+  "productName": "Repo Multi-Check Widget",
   "version": "0.1.0",
-  "identifier": "com.cykim.git-multi-check-widget",
+  "identifier": "com.cykim.repo-multi-check-widget",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1421",
@@ -14,7 +14,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Git Multi-Check",
+        "title": "Repo Multi-Check",
         "width": 360,
         "height": 220,
         "resizable": true,
@@ -28,7 +28,7 @@
       },
       {
         "label": "settings",
-        "title": "Git Multi-Check — 설정",
+        "title": "Repo Multi-Check — 설정",
         "url": "settings.html",
         "width": 520,
         "height": 640,

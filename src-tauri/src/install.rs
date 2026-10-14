@@ -1,10 +1,18 @@
+use crate::config::APP_DIR;
 use auto_launch::{AutoLaunch, AutoLaunchBuilder};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const APP_FOLDER: &str = "GitMultiCheckWidget";
-const EXE_NAME: &str = "git-multi-check-widget.exe";
-const AUTOSTART_NAME: &str = "Git Multi-Check Widget";
+const APP_FOLDER: &str = APP_DIR;
+const EXE_NAME: &str = "repo-multi-check-widget.exe";
+const AUTOSTART_NAME: &str = "Repo Multi-Check Widget";
+/// Run-key names this app has used, newest first. The older ones are from
+/// before the rename from git-multi-check-widget and point at the old install.
+const AUTOSTART_NAMES: [&str; 3] = [
+    AUTOSTART_NAME,
+    "Git Multi-Check Widget",
+    "git-multi-check-widget",
+];
 
 pub fn install_dir() -> Result<PathBuf, String> {
     let base = std::env::var_os("LOCALAPPDATA")
@@ -103,7 +111,7 @@ fn disable_named(name: &str, exe: &Path) {
 pub fn autostart_disable() -> Result<(), String> {
     let installed = installed_exe_path().unwrap_or_else(|_| PathBuf::from(EXE_NAME));
     let current = std::env::current_exe().unwrap_or_else(|_| installed.clone());
-    for name in [AUTOSTART_NAME, "git-multi-check-widget"] {
+    for name in AUTOSTART_NAMES {
         disable_named(name, &installed);
         disable_named(name, &current);
     }
@@ -120,7 +128,7 @@ pub fn cleanup_stale_debug_autostart() {
             r"Software\Microsoft\Windows\CurrentVersion\Run",
             KEY_ALL_ACCESS,
         ) {
-            for name in [AUTOSTART_NAME, "git-multi-check-widget"] {
+            for name in AUTOSTART_NAMES {
                 if let Ok(val) = key.get_value::<String, _>(name) {
                     let lower = val.to_lowercase();
                     if lower.contains(r"\debug\") || lower.contains("/debug/") {
@@ -137,7 +145,7 @@ pub fn cleanup_stale_debug_autostart() {
     if !is_debug_exe(&current) {
         return;
     }
-    for name in [AUTOSTART_NAME, "git-multi-check-widget"] {
+    for name in AUTOSTART_NAMES {
         if let Ok(al) = AutoLaunchBuilder::new()
             .set_app_name(name)
             .set_app_path(&current.display().to_string())
@@ -147,6 +155,32 @@ pub fn cleanup_stale_debug_autostart() {
             if al.is_enabled().unwrap_or(false) {
                 let _ = al.disable();
             }
+        }
+    }
+}
+
+/// A user who had autostart on before the rename has a Run entry that still
+/// starts the old exe. Swap it for one that starts this install.
+pub fn migrate_legacy_autostart() {
+    #[cfg(all(windows, not(debug_assertions)))]
+    {
+        use winreg::enums::{HKEY_CURRENT_USER, KEY_ALL_ACCESS};
+        use winreg::RegKey;
+        let Ok(key) = RegKey::predef(HKEY_CURRENT_USER).open_subkey_with_flags(
+            r"Software\Microsoft\Windows\CurrentVersion\Run",
+            KEY_ALL_ACCESS,
+        ) else {
+            return;
+        };
+        let mut had_legacy = false;
+        for name in &AUTOSTART_NAMES[1..] {
+            if key.get_value::<String, _>(name).is_ok() {
+                had_legacy = true;
+                let _ = key.delete_value(name);
+            }
+        }
+        if had_legacy {
+            let _ = autostart_enable();
         }
     }
 }

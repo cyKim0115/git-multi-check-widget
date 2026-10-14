@@ -8,7 +8,7 @@ mod tray;
 
 use install::{
     autostart_disable, autostart_enable, autostart_is_enabled, cleanup_stale_debug_autostart,
-    ensure_installed_release,
+    ensure_installed_release, migrate_legacy_autostart,
 };
 
 use config::{load_config, save_config, OpenTarget, RepoConfig, RepoEntry};
@@ -228,8 +228,28 @@ fn set_always_on_top(app: tauri::AppHandle, enabled: bool) -> Result<(), String>
     window.set_always_on_top(enabled).map_err(|e| e.to_string())
 }
 
+/// The window-state plugin keeps the widget position under the app identifier,
+/// which changed with the rename. Carry the old file over before the plugin
+/// reads it, so the widget reopens where the user left it.
+fn migrate_legacy_window_state() {
+    const STATE_FILE: &str = ".window-state.json";
+    let Some(roaming) = std::env::var_os("APPDATA").map(std::path::PathBuf::from) else {
+        return;
+    };
+    let new_path = roaming.join("com.cykim.repo-multi-check-widget").join(STATE_FILE);
+    let old_path = roaming.join("com.cykim.git-multi-check-widget").join(STATE_FILE);
+    if new_path.is_file() || !old_path.is_file() {
+        return;
+    }
+    if let Some(parent) = new_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::copy(&old_path, &new_path);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    migrate_legacy_window_state();
     tauri::Builder::default()
         // 위젯 위치만 복원한다. 창 높이는 레포 개수에 따라 프런트가 매번 다시 계산하므로
         // (main.ts의 maybeAutoResizeWindow), 크기까지 저장하면 지난 실행의 레포 개수가
@@ -271,6 +291,7 @@ pub fn run() {
             tray::install(app)?;
             cleanup_stale_debug_autostart();
             let _ = ensure_installed_release();
+            migrate_legacy_autostart();
             // tauri.conf.json pins the window to always-on-top, so a user who
             // turned it off is restored here before the webview paints.
             if let Some(window) = app.get_webview_window("main") {

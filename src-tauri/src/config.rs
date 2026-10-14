@@ -73,11 +73,33 @@ impl Default for RepoConfig {
     }
 }
 
-pub fn user_config_path() -> PathBuf {
-    let base = std::env::var("LOCALAPPDATA")
+/// Per-user data folder under %LOCALAPPDATA%.
+pub const APP_DIR: &str = "RepoMultiCheckWidget";
+/// Folder name before the project was renamed from git-multi-check-widget.
+pub const LEGACY_APP_DIR: &str = "GitMultiCheckWidget";
+
+fn local_app_data() -> PathBuf {
+    std::env::var("LOCALAPPDATA")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("."));
-    base.join("GitMultiCheckWidget").join("repos.json")
+        .unwrap_or_else(|_| PathBuf::from("."))
+}
+
+pub fn user_config_path() -> PathBuf {
+    local_app_data().join(APP_DIR).join("repos.json")
+}
+
+/// The widget used to keep its repo list under the old folder name. Copy it
+/// over once so the rename does not lose the user's repos (the old file stays).
+fn migrate_legacy_config() {
+    let new_path = user_config_path();
+    let old_path = local_app_data().join(LEGACY_APP_DIR).join("repos.json");
+    if new_path.is_file() || !old_path.is_file() {
+        return;
+    }
+    if let Some(parent) = new_path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let _ = fs::copy(&old_path, &new_path);
 }
 
 fn default_config_candidates() -> Vec<PathBuf> {
@@ -88,12 +110,7 @@ fn default_config_candidates() -> Vec<PathBuf> {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(parent) = exe.parent() {
             paths.push(parent.join("config").join("repos.default.json"));
-            paths.push(
-                parent
-                    .join("..")
-                    .join("config")
-                    .join("repos.default.json"),
-            );
+            paths.push(parent.join("..").join("config").join("repos.default.json"));
         }
     }
     paths
@@ -122,6 +139,7 @@ fn seed_config() -> RepoConfig {
 }
 
 pub fn load_config() -> RepoConfig {
+    migrate_legacy_config();
     let user_path = user_config_path();
     if user_path.is_file() {
         if let Ok(text) = fs::read_to_string(&user_path) {

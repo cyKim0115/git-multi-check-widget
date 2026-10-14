@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    git_multi_check_widget_lib::run()
+    repo_multi_check_widget_lib::run()
 }

@@ -1,12 +1,12 @@
 [package]
-name = "git-multi-check-widget"
+name = "repo-multi-check-widget"
 version = "0.1.0"
-description = "Desktop widget for multi-repo git status"
+description = "Desktop widget for multi-repo git/svn status"
 authors = ["cykim"]
 edition = "2021"
 
 [lib]
-name = "git_multi_check_widget_lib"
+name = "repo_multi_check_widget_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

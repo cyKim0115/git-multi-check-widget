@@ -1,4 +1,4 @@
-# Launches Git Multi-Check Widget for non-developers.
+# Launches Repo Multi-Check Widget for non-developers.
 # Rebuilds release when source is newer than the installed exe.
 # Use -ForceRebuild to always rebuild before install (agent / post-task refresh).
 
@@ -12,14 +12,16 @@ if (-not (Test-Path (Join-Path $Root "package.json"))) {
   $Root = $PSScriptRoot
 }
 
-$InstallDir = Join-Path $env:LOCALAPPDATA "GitMultiCheckWidget"
-$InstallExe = Join-Path $InstallDir "git-multi-check-widget.exe"
-$ReleaseExe = Join-Path $Root "src-tauri\target\release\git-multi-check-widget.exe"
-$ProcessName = "git-multi-check-widget"
+$InstallDir = Join-Path $env:LOCALAPPDATA "RepoMultiCheckWidget"
+$InstallExe = Join-Path $InstallDir "repo-multi-check-widget.exe"
+$ReleaseExe = Join-Path $Root "src-tauri\target\release\repo-multi-check-widget.exe"
+# The second name is the install from before the rename (git-multi-check-widget); stop it too.
+$ProcessNames = @("repo-multi-check-widget", "git-multi-check-widget")
+$LegacyConfig = Join-Path $env:LOCALAPPDATA "GitMultiCheckWidget\repos.json"
 
 function Show-Error([string]$Message) {
   Add-Type -AssemblyName PresentationFramework | Out-Null
-  [System.Windows.MessageBox]::Show($Message, "Git Multi-Check Widget", "OK", "Error") | Out-Null
+  [System.Windows.MessageBox]::Show($Message, "Repo Multi-Check Widget", "OK", "Error") | Out-Null
 }
 
 function Ensure-VcEnv {
@@ -98,7 +100,7 @@ function Build-Release {
 }
 
 function Stop-RunningWidget {
-  Get-Process -Name $ProcessName -ErrorAction SilentlyContinue | ForEach-Object {
+  Get-Process -Name $ProcessNames -ErrorAction SilentlyContinue | ForEach-Object {
     Write-Host "Stopping running widget (PID $($_.Id))..."
     Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
     Start-Sleep -Milliseconds 400
@@ -117,16 +119,20 @@ if (-not (Test-Path $ReleaseExe)) {
 Stop-RunningWidget
 
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
-$tmp = Join-Path $InstallDir "git-multi-check-widget.new.exe"
+$tmp = Join-Path $InstallDir "repo-multi-check-widget.new.exe"
 Copy-Item -Force $ReleaseExe $tmp
 if (Test-Path $InstallExe) { Remove-Item -Force $InstallExe }
 Rename-Item -Force $tmp (Split-Path $InstallExe -Leaf)
 Write-Host "Installed: $InstallExe"
 
 $defaultConfig = Join-Path $Root "config\repos.default.json"
-$userConfig = Join-Path $env:LOCALAPPDATA "GitMultiCheckWidget\repos.json"
-if ((Test-Path $defaultConfig) -and -not (Test-Path $userConfig)) {
-  Copy-Item -Force $defaultConfig $userConfig
+$userConfig = Join-Path $InstallDir "repos.json"
+if (-not (Test-Path $userConfig)) {
+  if (Test-Path $LegacyConfig) {
+    Copy-Item -Force $LegacyConfig $userConfig
+  } elseif (Test-Path $defaultConfig) {
+    Copy-Item -Force $defaultConfig $userConfig
+  }
 }
 
 Start-Process -FilePath $InstallExe
