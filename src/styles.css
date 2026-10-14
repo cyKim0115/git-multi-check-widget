@@ -73,23 +73,29 @@ body {
 }
 
 .repo-section {
-  /* flex-grow is set per render from each section's row count (main.ts). */
-  flex: 1 1 0;
+  /*
+   * flex-grow is set per render from each section's row count (main.ts). The
+   * basis is the label row, so only the list space is shared by row count —
+   * a zero basis would hand the bigger section part of the smaller one's label.
+   */
+  flex: 1 1 24px;
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
 
-#svn-section.hidden {
+.repo-section.hidden {
   display: none;
 }
 
-/* A lone Git list needs no caption; the label only earns its row in split mode. */
+/* Every visible section keeps its caption: the quick-pull button lives in it. */
 .section-label {
-  display: none;
+  display: flex;
   flex: none;
   height: 22px;
   align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -99,8 +105,68 @@ body {
   margin-bottom: 2px;
 }
 
-.sections--split .section-label {
-  display: flex;
+.quick-pull {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 17px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: normal;
+  text-transform: none;
+  background: rgba(91, 159, 212, 0.25);
+  color: #9fd0ff;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.quick-pull:hover {
+  background: rgba(91, 159, 212, 0.4);
+}
+
+.quick-pull:active {
+  background: rgba(91, 159, 212, 0.5);
+}
+
+.quick-pull:disabled {
+  cursor: default;
+  background: rgba(91, 159, 212, 0.16);
+}
+
+.quick-pull.hidden {
+  display: none;
+}
+
+.quick-pull-glyph {
+  font-size: 11px;
+  line-height: 1;
+}
+
+.quick-pull-spinner {
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid rgba(159, 208, 255, 0.35);
+  border-top-color: #9fd0ff;
+  border-radius: 50%;
+  animation: repo-refresh-spin 0.75s linear infinite;
+  flex-shrink: 0;
+}
+
+.sections-empty {
+  margin: 0;
+  padding: 8px 4px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+  text-align: center;
+}
+
+.sections-empty.hidden {
+  display: none;
 }
 
 .repo-scroll-wrap {
@@ -495,6 +561,7 @@ body {
   font-size: 10px;
 }
 
+#git-settings-body.hidden,
 #svn-settings-body.hidden {
   display: none;
 }
@@ -840,4 +907,99 @@ body {
   color: var(--muted);
   text-align: center;
   line-height: 1.2;
+}
+
+/* Quick-pull failure popup (separate WebviewWindow, reuses the settings look) */
+.pull-report-body {
+  height: 100vh;
+  overflow: hidden;
+}
+
+.pull-report {
+  height: 100%;
+  padding: 16px 18px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pull-report-header h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.pull-report-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pull-report-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(212, 107, 91, 0.1);
+  border: 1px solid rgba(212, 107, 91, 0.22);
+}
+
+.pull-report-item-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pull-report-vcs {
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+}
+
+.pull-report-vcs--git {
+  background: rgba(91, 159, 212, 0.25);
+  color: #9fd0ff;
+}
+
+.pull-report-vcs--svn {
+  background: rgba(125, 211, 160, 0.18);
+  color: var(--ok);
+}
+
+.pull-report-name {
+  font-size: 13px;
+}
+
+.pull-report-path {
+  font-size: 11px;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+.pull-report-message {
+  margin: 2px 0 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.28);
+  color: #ffb4ab;
+  font-family: "Cascadia Mono", Consolas, "Malgun Gothic", monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+}
+
+.pull-report-footer {
+  flex: none;
 }

@@ -16,7 +16,10 @@
 
       <div id="sections" class="sections">
         <section class="repo-section" id="git-section">
-          <div class="section-label" data-tauri-drag-region>Git</div>
+          <div class="section-label" data-tauri-drag-region>
+            <span class="section-title" data-tauri-drag-region>Git</span>
+            <button id="git-pull-btn" class="quick-pull hidden" type="button"></button>
+          </div>
           <div id="repo-scroll-wrap" class="repo-scroll-wrap">
             <div id="repo-scroll" class="repo-scroll">
               <ul id="repo-list" class="repo-list" aria-label="git repository status"></ul>
@@ -27,7 +30,10 @@
         </section>
 
         <section class="repo-section hidden" id="svn-section">
-          <div class="section-label" data-tauri-drag-region>SVN</div>
+          <div class="section-label" data-tauri-drag-region>
+            <span class="section-title" data-tauri-drag-region>SVN</span>
+            <button id="svn-pull-btn" class="quick-pull hidden" type="button"></button>
+          </div>
           <div id="svn-scroll-wrap" class="repo-scroll-wrap">
             <div id="svn-scroll" class="repo-scroll">
               <ul id="svn-list" class="repo-list" aria-label="svn repository status"></ul>
@@ -36,6 +42,10 @@
             <div id="svn-fade-bottom" class="repo-fade repo-fade--bottom" aria-hidden="true"></div>
           </div>
         </section>
+
+        <p id="sections-empty" class="sections-empty hidden" data-tauri-drag-region>
+          Git·SVN 영역이 모두 꺼져 있습니다. 우클릭 → 설정에서 켜세요.
+        </p>
       </div>
 
       <footer class="footer" data-tauri-drag-region>
