@@ -15,7 +15,7 @@ SIZES = [16, 32, 48, 256]
 
 
 def to_bmp_dib(im: Image.Image) -> bytes:
-    """Return BITMAPINFOHEADER + BGRA XOR bitmap + empty AND mask (ICO style)."""
+    """Return BITMAPINFOHEADER + BGRA XOR bitmap + AND mask (ICO style)."""
     im = im.convert("RGBA")
     w, h = im.size
     pixels = im.split()
@@ -34,8 +34,15 @@ def to_bmp_dib(im: Image.Image) -> bytes:
         dst_off = (h - 1 - row) * stride
         xor[dst_off : dst_off + stride] = bgra[src_off : src_off + stride]
 
+    # Fully transparent pixels are also transparent in the AND mask, so paths
+    # that ignore alpha do not fill them with black.
     and_row = ((w + 31) // 32) * 4
-    and_mask = bytes(and_row * h)
+    and_mask = bytearray(and_row * h)
+    for row in range(h):
+        dst_off = (h - 1 - row) * and_row
+        for col in range(w):
+            if a[row * w + col] == 0:
+                and_mask[dst_off + col // 8] |= 0x80 >> (col % 8)
 
     header = struct.pack(
         "<IIIHHIIIIII",
@@ -51,7 +58,7 @@ def to_bmp_dib(im: Image.Image) -> bytes:
         0,
         0,
     )
-    return header + bytes(xor) + and_mask
+    return header + bytes(xor) + bytes(and_mask)
 
 
 def write_ico(frames: list[Image.Image], dest: Path) -> None:
@@ -78,14 +85,13 @@ def write_ico(frames: list[Image.Image], dest: Path) -> None:
 
 
 def main() -> None:
+    # Keep the transparent background: 32-bit BMP entries carry alpha, and the
+    # AND mask covers the transparent area, so the tray shows no black tile.
     img = Image.open(SRC).convert("RGBA")
-    # Opaque black tile — Explorer shows this more reliably than fully transparent bg.
-    bg = Image.new("RGBA", img.size, (0, 0, 0, 255))
-    composed = Image.alpha_composite(bg, img)
 
     frames: list[Image.Image] = []
     for s in SIZES:
-        im = composed.resize((s, s), Image.Resampling.LANCZOS)
+        im = img.resize((s, s), Image.Resampling.LANCZOS)
         frames.append(im)
         if s == 32:
             im.save(ICONS / "32x32.png")
