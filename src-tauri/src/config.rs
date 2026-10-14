@@ -37,11 +37,19 @@ fn default_always_on_top() -> bool {
     true
 }
 
+/// The Git section predates its toggle, so a config without the key keeps it on.
+fn default_git_enabled() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RepoConfig {
     pub repos: Vec<RepoEntry>,
     #[serde(default)]
     pub open_target: OpenTarget,
+    /// Off hides the Git section; the registered list is kept for when it comes back.
+    #[serde(default = "default_git_enabled")]
+    pub git_enabled: bool,
     /// SVN section stays hidden until the user turns it on in settings.
     #[serde(default)]
     pub svn_enabled: bool,
@@ -57,6 +65,7 @@ impl Default for RepoConfig {
         Self {
             repos: Vec::new(),
             open_target: OpenTarget::default(),
+            git_enabled: default_git_enabled(),
             svn_enabled: false,
             svn_repos: Vec::new(),
             always_on_top: default_always_on_top(),
@@ -105,6 +114,7 @@ fn seed_config() -> RepoConfig {
             },
         ],
         open_target: OpenTarget::default(),
+        git_enabled: default_git_enabled(),
         svn_enabled: false,
         svn_repos: Vec::new(),
         always_on_top: default_always_on_top(),

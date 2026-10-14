@@ -8,6 +8,7 @@ import type { RepoConfig, RepoEntry, ValidateResult, Vcs } from "./types";
 let configDraft: RepoConfig = {
   repos: [],
   open_target: DEFAULT_OPEN_TARGET,
+  git_enabled: true,
   svn_enabled: false,
   svn_repos: [],
   always_on_top: true,
@@ -40,6 +41,8 @@ async function revertAlwaysOnTop() {
  * helper is addressed by kind instead of being duplicated.
  */
 type KindUi = {
+  toggleId: string;
+  bodyId: string;
   listId: string;
   emptyId: string;
   nameInputId: string;
@@ -52,6 +55,8 @@ type KindUi = {
 
 const UI: Record<Vcs, KindUi> = {
   git: {
+    toggleId: "git-enabled-checkbox",
+    bodyId: "git-settings-body",
     listId: "settings-repo-list",
     emptyId: "settings-empty",
     nameInputId: "input-name",
@@ -62,6 +67,8 @@ const UI: Record<Vcs, KindUi> = {
     validateCommand: "validate_repo",
   },
   svn: {
+    toggleId: "svn-enabled-checkbox",
+    bodyId: "svn-settings-body",
     listId: "settings-svn-list",
     emptyId: "settings-svn-empty",
     nameInputId: "input-svn-name",
@@ -74,6 +81,16 @@ const UI: Record<Vcs, KindUi> = {
 };
 
 const lastValidate: Record<Vcs, ValidateResult | null> = { git: null, svn: null };
+
+/** A missing Git flag means on (it predates the toggle); a missing SVN flag means off. */
+function isEnabled(kind: Vcs): boolean {
+  return kind === "svn" ? (configDraft.svn_enabled ?? false) : (configDraft.git_enabled ?? true);
+}
+
+function setEnabled(kind: Vcs, enabled: boolean) {
+  if (kind === "svn") configDraft.svn_enabled = enabled;
+  else configDraft.git_enabled = enabled;
+}
 
 function entriesFor(kind: Vcs): RepoEntry[] {
   if (kind === "svn") {
@@ -296,6 +313,7 @@ function resetAddForm(kind: Vcs) {
 async function loadConfigDraft() {
   configDraft = (await invoke("get_config")) as RepoConfig;
   configDraft.open_target = normalizeOpenTarget(configDraft.open_target);
+  configDraft.git_enabled ??= true;
   configDraft.svn_enabled ??= false;
   configDraft.svn_repos ??= [];
   configDraft.always_on_top ??= true;
@@ -313,10 +331,11 @@ function renderAlwaysOnTopSettings() {
   checkbox.checked = configDraft.always_on_top ?? true;
 }
 
-function renderSvnSettings() {
-  const checkbox = $("svn-enabled-checkbox") as HTMLInputElement;
-  checkbox.checked = configDraft.svn_enabled ?? false;
-  $("svn-settings-body").classList.toggle("hidden", !checkbox.checked);
+/** The list and add form only show while the section is switched on. */
+function renderEnabledToggle(kind: Vcs) {
+  const checkbox = $(UI[kind].toggleId) as HTMLInputElement;
+  checkbox.checked = isEnabled(kind);
+  $(UI[kind].bodyId).classList.toggle("hidden", !checkbox.checked);
 }
 
 async function runTest(kind: Vcs) {
@@ -391,7 +410,8 @@ async function refreshView() {
   renderSettingsList("svn");
   renderOpenTargetSettings();
   renderAlwaysOnTopSettings();
-  renderSvnSettings();
+  renderEnabledToggle("git");
+  renderEnabledToggle("svn");
   await renderAutostartSettings();
   resetAddForm("git");
   resetAddForm("svn");
@@ -491,11 +511,13 @@ function bindUi() {
     void applyAlwaysOnTop(alwaysOnTopCheckbox.checked);
   });
 
-  const svnCheckbox = $("svn-enabled-checkbox") as HTMLInputElement;
-  svnCheckbox.addEventListener("change", () => {
-    configDraft.svn_enabled = svnCheckbox.checked;
-    renderSvnSettings();
-  });
+  for (const kind of Object.keys(UI) as Vcs[]) {
+    const checkbox = $(UI[kind].toggleId) as HTMLInputElement;
+    checkbox.addEventListener("change", () => {
+      setEnabled(kind, checkbox.checked);
+      renderEnabledToggle(kind);
+    });
+  }
 
   const autostartCheckbox = $("autostart-checkbox") as HTMLInputElement;
   autostartCheckbox.addEventListener("change", () => {
