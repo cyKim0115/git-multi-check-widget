@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      body.settings-window-body {
+        margin: 0;
+        background: #16181c;
+        color: #e8eaed;
+      }
+    </style>
+    <link rel="stylesheet" href="/src/styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>빠른 풀 — 실패한 저장소</title>
+    <script type="module" src="/src/pull-report.ts" defer></script>
+  </head>
+  <body class="settings-window-body pull-report-body">
+    <div class="pull-report">
+      <header class="pull-report-header">
+        <h1 id="pull-report-title">풀하지 못한 저장소</h1>
+        <p class="settings-subtitle">
+          실패한 저장소는 건너뛰고 나머지는 모두 풀했습니다.
+        </p>
+      </header>
+
+      <ul id="pull-report-list" class="pull-report-list"></ul>
+
+      <footer class="pull-report-footer">
+        <button id="btn-pull-report-close" class="btn primary wide" type="button">닫기</button>
+      </footer>
+    </div>
+  </body>
+</html>

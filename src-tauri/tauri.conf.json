@@ -41,6 +41,22 @@
         "visible": false,
         "center": true,
         "skipTaskbar": true
+      },
+      {
+        "label": "pull-report",
+        "title": "빠른 풀 — 실패한 저장소",
+        "url": "pull-report.html",
+        "width": 480,
+        "height": 340,
+        "minWidth": 360,
+        "minHeight": 220,
+        "resizable": true,
+        "decorations": true,
+        "alwaysOnTop": true,
+        "transparent": false,
+        "visible": false,
+        "center": true,
+        "skipTaskbar": true
       }
     ],
     "security": {

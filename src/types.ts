@@ -20,6 +20,8 @@ export type RepoEntry = {
 export type RepoConfig = {
   repos: RepoEntry[];
   open_target?: OpenTarget;
+  /** Off hides the Git section; the registered list is kept. Missing means on. */
+  git_enabled?: boolean;
   /** SVN section stays hidden until switched on in settings. */
   svn_enabled?: boolean;
   svn_repos?: RepoEntry[];
@@ -57,4 +59,17 @@ export type ValidateResult = {
   resolved_path: string | null;
   suggested_name: string | null;
   remote_url: string | null;
+};
+
+/** One repo's quick-pull result. Only `ok: false` rows reach the report popup. */
+export type PullOutcome = {
+  ok: boolean;
+  message: string;
+};
+
+export type PullFailure = {
+  vcs: Vcs;
+  name: string;
+  path: string;
+  message: string;
 };

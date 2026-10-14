@@ -2,6 +2,7 @@ mod app_launch;
 mod config;
 mod git_scan;
 mod install;
+mod pull;
 mod svn_scan;
 mod tray;
 
@@ -12,11 +13,18 @@ use install::{
 
 use config::{load_config, save_config, OpenTarget, RepoConfig, RepoEntry};
 use git_scan::{scan_one, scan_repos, validate_repo_input, RepoStatus, ScanResult, ValidateResult};
+use pull::{PullFailure, PullOutcome};
+use std::sync::Mutex;
 use tauri::{Emitter, Manager, WindowEvent};
 use tauri_plugin_window_state::StateFlags;
 
 const POLL_INTERVAL_MS: u64 = 300_000;
 const SETTINGS_LABEL: &str = "settings";
+const PULL_REPORT_LABEL: &str = "pull-report";
+
+/// 빠른 풀 결과 팝업에 띄울 실패 목록. 팝업 창이 열릴 때 가져간다.
+#[derive(Default)]
+struct PullReport(Mutex<Vec<PullFailure>>);
 
 #[tauri::command]
 fn get_config() -> RepoConfig {
@@ -34,7 +42,8 @@ fn scan_all_repos() -> ScanResult {
     scan_repos(&config.repos, true)
 }
 
-#[tauri::command]
+/// fetch가 몇 초씩 걸려도 창(위젯·팝업)이 멈추지 않게 메인 스레드가 아닌 스레드 풀에서 돈다.
+#[tauri::command(async)]
 fn scan_one_repo(name: String, path: String, do_fetch: bool) -> RepoStatus {
     let entry = RepoEntry {
         name,
@@ -49,7 +58,8 @@ fn validate_repo(input: String) -> ValidateResult {
     validate_repo_input(&input)
 }
 
-#[tauri::command]
+/// `svn status -u`는 서버를 거쳐 수 초 걸리므로 스캔도 스레드 풀에서 돈다.
+#[tauri::command(async)]
 fn scan_one_svn_repo(name: String, path: String, do_fetch: bool) -> RepoStatus {
     let entry = RepoEntry {
         name,
@@ -62,6 +72,78 @@ fn scan_one_svn_repo(name: String, path: String, do_fetch: bool) -> RepoStatus {
 #[tauri::command]
 fn validate_svn_repo(input: String) -> ValidateResult {
     svn_scan::validate_input(&input)
+}
+
+/// fetch·merge는 몇 초씩 걸리므로 메인 스레드가 아닌 스레드 풀에서 돈다.
+#[tauri::command(async)]
+fn pull_git_repo(path: String) -> PullOutcome {
+    pull::pull_git(&path)
+}
+
+/// 대형 작업본 업데이트는 몇 분도 걸린다. 메인 스레드를 막지 않게 스레드 풀에서 돈다.
+#[tauri::command(async)]
+fn update_svn_repo(path: String) -> PullOutcome {
+    pull::update_svn(&path)
+}
+
+/// 풀 한 번이 끝날 때마다 불린다. Git·SVN 풀이 따로 끝나도 한 팝업에 모이도록,
+/// 열려 있는 동안 온 결과는 이어 붙인다. 이번에 시도한 레포의 예전 결과는 새 결과로
+/// 바꾸므로, 이번에 성공한 레포는 열린 팝업에서도 빠진다. 팝업은 실패가 있을 때만 연다.
+#[tauri::command]
+fn report_pull_results(
+    app: tauri::AppHandle,
+    report: tauri::State<PullReport>,
+    vcs: config::Vcs,
+    attempted: Vec<String>,
+    failures: Vec<PullFailure>,
+) -> Result<(), String> {
+    let window = app
+        .get_webview_window(PULL_REPORT_LABEL)
+        .ok_or_else(|| "pull report window not found".to_string())?;
+    let already_open = window.is_visible().unwrap_or(false);
+    let has_new_failures = !failures.is_empty();
+    let list = {
+        let mut list = report.0.lock().map_err(|e| e.to_string())?;
+        if !already_open {
+            list.clear();
+        }
+        list.retain(|old| !(old.vcs == vcs && attempted.contains(&old.path)));
+        list.extend(failures);
+        list.clone()
+    };
+
+    if !has_new_failures && !already_open {
+        return Ok(());
+    }
+    if list.is_empty() {
+        // 남은 실패가 없으면 열어 둔 팝업도 닫는다.
+        window.hide().map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+    // 목록을 이벤트에 실어 보낸다. 팝업이 다시 물어보면 그 요청이 스캔 뒤에 줄을 서
+    // 지난 내용을 띄운 채 멈춰 있을 수 있다. 보이기 전에 보내 새 내용으로 뜨게 한다.
+    window
+        .emit("pull-report-open", list)
+        .map_err(|e| e.to_string())?;
+    if has_new_failures {
+        window.show().map_err(|e| e.to_string())?;
+        window.unminimize().map_err(|e| e.to_string())?;
+        window.set_focus().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn get_pull_report(report: tauri::State<PullReport>) -> Vec<PullFailure> {
+    report.0.lock().map(|list| list.clone()).unwrap_or_default()
+}
+
+#[tauri::command]
+fn close_pull_report(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window(PULL_REPORT_LABEL) {
+        window.hide().map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -152,13 +234,14 @@ pub fn run() {
         // 위젯 위치만 복원한다. 창 높이는 레포 개수에 따라 프런트가 매번 다시 계산하므로
         // (main.ts의 maybeAutoResizeWindow), 크기까지 저장하면 지난 실행의 레포 개수가
         // 이번 실행을 덮어써 잘못된 높이로 떴다가 줄어드는 깜빡임이 생긴다.
-        // 설정 창은 tauri.conf.json의 center 동작을 유지한다.
+        // 설정 창·풀 결과 팝업은 tauri.conf.json의 center 동작을 유지한다.
         .plugin(
             tauri_plugin_window_state::Builder::default()
                 .with_state_flags(StateFlags::POSITION)
-                .with_denylist(&[SETTINGS_LABEL])
+                .with_denylist(&[SETTINGS_LABEL, PULL_REPORT_LABEL])
                 .build(),
         )
+        .manage(PullReport::default())
         .invoke_handler(tauri::generate_handler![
             get_config,
             set_config,
@@ -167,6 +250,11 @@ pub fn run() {
             validate_repo,
             scan_one_svn_repo,
             validate_svn_repo,
+            pull_git_repo,
+            update_svn_repo,
+            report_pull_results,
+            get_pull_report,
+            close_pull_report,
             get_poll_interval_ms,
             quit_app,
             open_settings_window,
@@ -191,14 +279,22 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if window.label() != SETTINGS_LABEL {
+            let WindowEvent::CloseRequested { api, .. } = event else {
                 return;
-            }
-            if let WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-                // 창 X는 취소와 같다. 설정이 즉시 반영해 둔 창 플래그를 되돌릴 기회를 준다.
-                let _ = window.emit("settings-cancelled", ());
-                let _ = window.hide();
+            };
+            match window.label() {
+                SETTINGS_LABEL => {
+                    api.prevent_close();
+                    // 창 X는 취소와 같다. 설정이 즉시 반영해 둔 창 플래그를 되돌릴 기회를 준다.
+                    let _ = window.emit("settings-cancelled", ());
+                    let _ = window.hide();
+                }
+                // 팝업 창은 시작 때 한 번 만들어 두고 계속 다시 쓰므로 닫지 않고 숨긴다.
+                PULL_REPORT_LABEL => {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+                _ => {}
             }
         })
         .run(tauri::generate_context!())

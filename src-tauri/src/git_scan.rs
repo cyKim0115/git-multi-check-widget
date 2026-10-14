@@ -54,10 +54,10 @@ pub struct ValidateResult {
     pub remote_url: Option<String>,
 }
 
-struct GitOutput {
-    ok: bool,
-    stdout: String,
-    stderr: String,
+pub(crate) struct GitOutput {
+    pub(crate) ok: bool,
+    pub(crate) stdout: String,
+    pub(crate) stderr: String,
 }
 
 static GIT_PROGRAM: OnceLock<PathBuf> = OnceLock::new();
@@ -79,7 +79,7 @@ fn git_program() -> PathBuf {
         .clone()
 }
 
-fn new_git_command() -> Command {
+pub(crate) fn new_git_command() -> Command {
     let mut cmd = Command::new(git_program());
     cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())

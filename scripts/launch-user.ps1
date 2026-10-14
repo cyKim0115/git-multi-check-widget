@@ -43,6 +43,7 @@ function Get-SourceStamp {
     (Join-Path $Root "package.json"),
     (Join-Path $Root "index.html"),
     (Join-Path $Root "settings.html"),
+    (Join-Path $Root "pull-report.html"),
     (Join-Path $Root "vite.config.ts"),
     (Join-Path $Root "src-tauri\Cargo.toml"),
     (Join-Path $Root "src-tauri\tauri.conf.json")
